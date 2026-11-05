@@ -11,14 +11,14 @@
   "background_color": "#101310",
   "theme_color": "#111511",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Nouvelle séance", "short_name": "Séance", "url": "./?view=training", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Ajouter un repas", "short_name": "Repas", "url": "./?view=nutrition", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Noter mon poids", "short_name": "Poids", "url": "./?view=progress", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Nouvelle séance", "short_name": "Séance", "url": "./?view=training", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Ajouter un repas", "short_name": "Repas", "url": "./?view=nutrition", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Noter mon poids", "short_name": "Poids", "url": "./?view=progress", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }

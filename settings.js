@@ -150,7 +150,7 @@ async function notify(body) {
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return false;
-    await reg.showNotification("Personal Performance", { body, icon: "icons/icon-192.png", tag: "pp-reminder", lang: "fr" });
+    await reg.showNotification("Personal Performance", { body, icon: "icon-192.png", tag: "pp-reminder", lang: "fr" });
     return true;
   } catch (err) {
     console.warn("Notification impossible", err);

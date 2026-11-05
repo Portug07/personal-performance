@@ -6,9 +6,9 @@ const VERSION = "3.0.0";
 const CACHE_NAME = `personal-performance-${VERSION}`;
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./manifest.json", "./icon.svg",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png",
-  "./js/utils.js", "./js/data.js", "./js/db.js", "./js/charts.js", "./js/training.js", "./js/nutrition.js",
-  "./js/body.js", "./js/battery.js", "./js/wellbeing.js", "./js/dashboard.js", "./js/coach.js", "./js/backup.js", "./js/settings.js", "./js/app.js"
+  "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
+  "./utils.js", "./data.js", "./db.js", "./charts.js", "./training.js", "./nutrition.js",
+  "./body.js", "./battery.js", "./wellbeing.js", "./dashboard.js", "./coach.js", "./backup.js", "./settings.js", "./app.js"
 ];
 
 self.addEventListener("install", (event) => {
