@@ -1,0 +1,6 @@
+# Sauvegardes et exports personnels : ne jamais les publier
+personal-performance-*.json
+personal-performance_*.json
+nutrition-*.csv
+seances-*.csv
+__pycache__/

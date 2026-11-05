@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Politique de sécurité : seuls les fichiers de l'application peuvent s'exécuter, aucun envoi vers Internet (audit I1). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#111511">
+  <meta name="description" content="Suivi personnel de l'entraînement, de la nutrition et de la progression.">
+  <title>Personal Performance</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body data-current="dashboard">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">PP</div>
+      <div><div class="brand-name">PERSONAL PERFORMANCE</div><div class="brand-sub">TON SUIVI. TES DONNÉES. TON RYTHME.</div></div>
+    </div>
+    <div class="header-actions">
+      <span id="connection-status" class="status-pill">● En ligne</span>
+      <button class="install-button" id="install-button" type="button" hidden>Installer</button>
+    </div>
+  </header>
+
+  <div id="update-banner" class="update-banner" role="status" hidden>
+    <span id="update-text">Une nouvelle version est disponible.</span>
+    <button type="button" id="update-button" class="primary-button">Mettre à jour</button>
+  </div>
+  <div id="fatal-error" class="update-banner danger" hidden>
+    Le stockage local n'a pas pu être ouvert. Utilise une version récente de Chrome ou Edge, hors navigation privée.
+  </div>
+
+  <nav class="tabs" aria-label="Navigation principale">
+    <button type="button" class="tab active" data-view="dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Accueil</span></button>
+    <button type="button" class="tab" data-view="training"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 10h2v4H2zM20 10h2v4h-2zM5 7h3v10H5zM16 7h3v10h-3zM8 11h8v2H8z"/></svg><span>Séance</span></button>
+    <button type="button" class="tab" data-view="nutrition"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v8a3 3 0 0 0 2 2.8V22h2v-9.2A3 3 0 0 0 13 10V2h-1.5v7h-1V2h-1v7h-1V2zM17 2c-1.7 0-3 2.2-3 6v5h2v9h2V2z"/></svg><span>Nutrition</span></button>
+    <button type="button" class="tab" data-view="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18v2H3zM4 15l5-5 4 3 6-7 1.5 1.3L13.3 16 9 12.8l-3.6 3.6z"/></svg><span>Progrès</span></button>
+    <button type="button" class="tab" data-view="wellbeing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></svg><span>Forme</span></button>
+    <button type="button" class="tab" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10v2H4zM18 6h2v2h-2zM4 16h2v2H4zM10 16h10v2H10zM14 4h2v6h-2zM6 14h2v6H6z"/></svg><span>Réglages</span></button>
+  </nav>
+
+  <main class="shell">
+    <!-- ===================== ACCUEIL ===================== -->
+    <section id="view-dashboard" class="view active">
+      <div class="welcome">
+        <div>
+          <p class="eyebrow" id="today-label">ESPACE PERSONNEL</p>
+          <h1>Construis ta <span>progression.</span></h1>
+        </div>
+        <div class="welcome-mark">PP<span>/03</span></div>
+      </div>
+
+      <div id="backup-alert" class="alert" hidden>
+        <p id="backup-alert-text"></p>
+        <button type="button" class="primary-button" id="alert-backup">Sauvegarder maintenant</button>
+      </div>
+
+      <div class="metric-grid" id="dash-cards"></div>
+
+      <div class="two-column">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">AUJOURD'HUI</p><h3>Ton suivi quotidien</h3></div></div>
+          <div id="daily-checklist" class="checklist"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">RACCOURCIS</p><h3>Ajouter rapidement</h3></div></div>
+          <div class="quick-actions">
+            <button type="button" class="quick-action" data-go="training"><span>＋</span><b>Séance</b><small>Charges et reps</small></button>
+            <button type="button" class="quick-action" data-go="nutrition"><span>＋</span><b>Repas</b><small>Calories et macros</small></button>
+            <button type="button" class="quick-action" data-go="progress"><span>＋</span><b>Pesée</b><small>Poids et mesures</small></button>
+            <button type="button" class="quick-action" data-go="wellbeing"><span>＋</span><b>Check-in</b><small>Sommeil et forme</small></button>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">BILAN</p><h3>Ta période en un coup d'œil</h3><p class="muted" id="review-period"></p></div>
+          <select id="review-days" aria-label="Période du bilan"><option value="7">7 jours</option><option value="14">14 jours</option><option value="30">30 jours</option></select>
+        </div>
+        <table class="data-table review-table" id="review-table"></table>
+        <div class="button-row">
+          <button type="button" class="primary-button" id="copy-claude">Copier pour Claude</button>
+          <button type="button" class="secondary-button" id="share-claude" hidden>Partager</button>
+        </div>
+        <p class="hint">Colle ce bilan dans ton projet Claude « Coach » pour une analyse de ta période, sans API ni frais supplémentaires.</p>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">COACH</p><h3>Envoyer à ton agent coach</h3></div></div>
+        <div class="form-grid">
+          <label>Jour du récap<input type="date" id="recap-date"></label>
+          <label>Période de l'export<select id="export-period">
+            <option value="this-week">Semaine en cours (lundi → aujourd'hui)</option>
+            <option value="last-week">Semaine dernière (lundi → dimanche)</option>
+            <option value="last-7">7 derniers jours</option>
+            <option value="this-month">Mois en cours</option>
+            <option value="last-month">Mois dernier</option>
+          </select></label>
+        </div>
+        <div class="button-row">
+          <button type="button" class="primary-button" id="copy-recap">Copier le récap du jour</button>
+          <button type="button" class="secondary-button" id="export-period-json">Exporter la période (JSON)</button>
+          <button type="button" class="secondary-button" id="share-period-json" hidden>Partager l'export</button>
+        </div>
+        <p class="hint">Chaque soir : colle le récap dans la conversation de la semaine du projet « Personal Performance ». En fin de semaine ou de mois : joins l'export JSON à la conversation.</p>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">HISTORIQUE</p><h3>Dernières activités</h3></div></div>
+        <div id="recent-activity" class="activity-list"></div>
+      </article>
+    </section>
+
+    <!-- ===================== SÉANCE ===================== -->
+    <section id="view-training" class="view">
+      <div class="section-heading"><div><p class="eyebrow">PERFORMANCE</p><h2>Entraînement</h2>
+        <p class="muted">Charges de ta dernière séance reprises automatiquement. Les séries sans répétitions ne sont pas enregistrées.</p></div></div>
+
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">SAISIE</p><h3 id="workout-form-title">Nouvelle séance</h3></div></div>
+        <form id="workout-form" novalidate>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>Séance<select name="session"></select></label>
+            <label>Durée (min)<input name="duration" inputmode="numeric" autocomplete="off" placeholder="75"></label>
+            <label>Pesée avant séance (kg)<input name="weighIn" inputmode="decimal" autocomplete="off" placeholder="106"></label>
+          </div>
+          <p class="eyebrow">VÉLO D'ÉCHAUFFEMENT</p>
+          <div class="form-grid three">
+            <label>Temps (m:ss)<input name="bikeTime" inputmode="text" autocomplete="off" placeholder="8:15"></label>
+            <label>Distance (km)<input name="bikeKm" inputmode="decimal" autocomplete="off" placeholder="5"></label>
+            <label>Difficulté<input name="bikeLevel" inputmode="numeric" autocomplete="off" placeholder="25"></label>
+          </div>
+          <div class="form-grid">
+            <label>Marche du retour (km)<input name="walkKm" inputmode="decimal" autocomplete="off" placeholder="4,8"></label>
+            <label>Autre cardio (facultatif)<input name="cardio" maxlength="200" placeholder="Rameur 10 min, boxe…"></label>
+          </div>
+          <p class="hint">Séries en rest-pause : note les reps avant l'échec, puis le complément après la pause dans la case « RP » (ex. 8 + 7). Laisse « RP » vide pour une série classique.</p>
+          <datalist id="exercise-names"></datalist>
+          <div id="exercise-editor"></div>
+          <button type="button" class="secondary-button" id="add-exercise">+ Ajouter un exercice</button>
+          <label class="full-label">Notes de séance<textarea name="notes" rows="2" maxlength="2000" placeholder="Sensations, douleurs, énergie, remarques…"></textarea></label>
+          <div class="button-row">
+            <button class="primary-button" type="submit" id="workout-submit">Enregistrer la séance</button>
+            <button class="secondary-button" type="button" id="workout-cancel" hidden>Annuler</button>
+          </div>
+          <p class="hint">La saisie est gardée en brouillon : si l'application se ferme pendant la séance, tu la retrouves à la réouverture.</p>
+        </form>
+      </article>
+
+      <article class="panel rest-panel">
+        <div class="rest-row">
+          <span class="rest-title">Minuteur de repos</span>
+          <button type="button" class="chip-button" data-rest="60">1:00</button>
+          <button type="button" class="chip-button" data-rest="90">1:30</button>
+          <button type="button" class="chip-button" data-rest="120">2:00</button>
+          <button type="button" class="chip-button" data-rest="180">3:00</button>
+        </div>
+        <div class="rest-row">
+          <label class="toggle-row"><input type="checkbox" id="rest-auto"> Lancer automatiquement après chaque série de</label>
+          <select id="rest-seconds" aria-label="Durée du repos automatique"><option value="60">1:00</option><option value="90">1:30</option><option value="120">2:00</option><option value="180">3:00</option></select>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">JOURNAL</p><h3>Séances enregistrées</h3></div></div>
+        <div id="workout-history" class="record-list"></div>
+      </article>
+    </section>
+
+    <!-- ===================== NUTRITION ===================== -->
+    <section id="view-nutrition" class="view">
+      <div class="day-nav">
+        <button type="button" class="icon-button" id="day-prev" aria-label="Jour précédent">‹</button>
+        <div class="day-center">
+          <b id="day-label">Aujourd'hui</b>
+          <small id="day-sub"></small>
+        </div>
+        <button type="button" class="icon-button" id="day-next" aria-label="Jour suivant">›</button>
+      </div>
+      <div class="day-tools">
+        <label class="inline-label">Aller au<input type="date" id="day-picker"></label>
+        <button type="button" class="chip-button" id="day-today" hidden>Revenir à aujourd'hui</button>
+      </div>
+
+      <div class="metric-grid" id="nutrition-totals"></div>
+      <p class="muted" id="nutrition-fiber"></p>
+      <p class="muted" id="nutrition-alcohol" hidden></p>
+      <p class="hint" id="targets-hint" hidden>Définis tes objectifs de calories et de protéines dans <button type="button" class="link-button" data-go="settings">Réglages</button> pour voir ce qu'il te reste.</p>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">NOUVELLE ENTRÉE</p><h3 id="meal-form-title">Ajouter un aliment ou un repas</h3></div></div>
+        <form id="meal-form" novalidate>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>Repas<select name="kind"></select></label>
+            <label class="wide">Aliment / description<input name="name" maxlength="120" autocomplete="off" placeholder="Tape au moins 2 lettres : skyr, riz, poulet…"></label>
+          </div>
+          <div id="food-suggestions" class="food-suggestions"></div>
+          <div id="alcohol-fields" hidden>
+            <div id="alcohol-presets" class="food-suggestions"></div>
+            <div class="form-grid">
+              <label>Volume (ml)<input name="volumeMl" inputmode="numeric" autocomplete="off" placeholder="500"></label>
+              <label>Degré (%)<input name="abv" inputmode="decimal" autocomplete="off" placeholder="8,5"></label>
+            </div>
+            <p class="hint" id="alcohol-hint"></p>
+          </div>
+          <div class="form-grid">
+            <label>Poids (g)<input name="grams" inputmode="decimal" autocomplete="off" placeholder="150"></label>
+            <label>Portion (facultatif)<input name="quantity" maxlength="60" placeholder="1 bol, 2 tranches…"></label>
+            <label>Calories (kcal)<input name="kcal" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Protéines (g)<input name="protein" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Glucides (g)<input name="carbs" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Lipides (g)<input name="fat" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Fibres (g)<input name="fiber" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Photo (facultatif)<input type="file" name="photo" accept="image/*"></label>
+          </div>
+          <p class="hint" id="per100-hint"></p>
+          <div id="meal-photo-preview" class="photo-preview" hidden><img alt="Aperçu de la photo"><span class="hint">La photo sera réduite (environ 200 Ko) et ses données de localisation supprimées.</span></div>
+          <label class="toggle-row" id="meal-photo-keep" hidden><input type="checkbox" name="removePhoto"> Retirer la photo actuelle</label>
+          <div class="button-row">
+            <button class="primary-button" type="submit" id="meal-submit">Ajouter au journal</button>
+            <button class="secondary-button" type="button" id="meal-cancel" hidden>Annuler</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">CONSOMMATION</p><h3>Entrées du jour</h3></div></div>
+        <div id="meal-history" class="record-list"></div>
+      </article>
+    </section>
+
+    <!-- ===================== PROGRÈS ===================== -->
+    <section id="view-progress" class="view">
+      <div class="section-heading"><div><p class="eyebrow">ÉVOLUTION</p><h2>Poids & progression</h2>
+        <p class="muted">La moyenne sur 7 jours lisse les variations d'un jour à l'autre : c'est elle qui montre ta vraie tendance.</p></div></div>
+      <div id="weight-summary"></div>
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">COURBE</p><h3>Poids</h3></div>
+          <div class="segmented">
+            <button type="button" class="chip-button" data-range="30">30 j</button>
+            <button type="button" class="chip-button active" data-range="90">90 j</button>
+            <button type="button" class="chip-button" data-range="365">1 an</button>
+            <button type="button" class="chip-button" data-range="0">Tout</button>
+          </div>
+        </div>
+        <div id="weight-chart" class="chart-box"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">NOUVELLE MESURE</p><h3>Poids et mensurations</h3></div></div>
+        <form id="measurement-form" novalidate>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>Poids (kg)<input name="weight" inputmode="decimal" autocomplete="off" placeholder="105,4"></label>
+            <label>Moment de la pesée<select name="moment"><option value="Soir, avant séance">Soir, avant séance</option><option value="Matin à jeun">Matin à jeun</option><option value="Autre">Autre</option></select></label>
+            <label>Tour de taille (cm)<input name="waist" inputmode="decimal" autocomplete="off"></label>
+            <label>Tour de ventre (cm)<input name="belly" inputmode="decimal" autocomplete="off"></label>
+            <label>Tour de poitrine (cm)<input name="chest" inputmode="decimal" autocomplete="off"></label>
+            <label>Tour de bras (cm)<input name="arm" inputmode="decimal" autocomplete="off"></label>
+            <label>Tour de cuisse (cm)<input name="thigh" inputmode="decimal" autocomplete="off"></label>
+            <label>Note<input name="notes" maxlength="500" placeholder="Hanches, cou, conditions de pesée…"></label>
+          </div>
+          <div class="button-row">
+            <button class="primary-button" type="submit" id="measurement-submit">Enregistrer les mesures</button>
+            <button class="secondary-button" type="button" id="measurement-cancel" hidden>Annuler</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">TOUTES LES 4 SEMAINES</p><h3>Batterie de tests</h3>
+          <p class="muted">Même jour de la semaine, même créneau, dans cet ordre. Le premier test sert de référence.</p></div></div>
+        <div id="battery-summary"></div>
+        <form id="battery-form" novalidate>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>1. Vélo 5 km, effort max (m:ss)<input name="bikeS" inputmode="text" autocomplete="off" placeholder="8:10"></label>
+            <label>2. Chest press 8 RM (kg)<input name="chestPress8rm" inputmode="decimal" autocomplete="off" placeholder="72,5"></label>
+            <label>3. Tirage horizontal 8 RM (kg)<input name="row8rm" inputmode="decimal" autocomplete="off" placeholder="75"></label>
+            <label>4. Pompes max (nombre)<input name="pushups" inputmode="numeric" autocomplete="off" placeholder="25"></label>
+            <label>5. Planche (m:ss ou secondes)<input name="plankS" inputmode="text" autocomplete="off" placeholder="1:00"></label>
+            <label>6. Mobilité épaule droite (cm)<input name="backScratchR" inputmode="decimal" autocomplete="off" placeholder="-5"></label>
+            <label>6. Mobilité épaule gauche (cm)<input name="backScratchL" inputmode="decimal" autocomplete="off" placeholder="-10"></label>
+            <label class="wide">Notes (machine, réglages du siège…)<input name="notes" maxlength="1000" placeholder="Chest press : siège 4, dossier 2"></label>
+          </div>
+          <p class="hint">Mobilité (test « back scratch ») : distance entre les mains dans le dos, négative si elles ne se touchent pas. Le 7e point (poids moyen et tour de taille) vient des pesées et des mesures.</p>
+          <div class="button-row">
+            <button class="primary-button" type="submit" id="battery-submit">Enregistrer le test</button>
+            <button class="secondary-button" type="button" id="battery-cancel" hidden>Annuler</button>
+          </div>
+        </form>
+        <div id="battery-history" class="record-list"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">MUSCULATION</p><h3>Progression par exercice</h3></div>
+          <select id="progress-exercise" aria-label="Exercice"></select></div>
+        <div id="exercise-progress"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">MENSURATIONS</p><h3>Première et dernière mesure</h3></div></div>
+        <div id="measure-evolution"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">HISTORIQUE</p><h3>Mes mesures</h3></div></div>
+        <div id="measurement-history" class="record-list"></div>
+      </article>
+    </section>
+
+    <!-- ===================== FORME ===================== -->
+    <section id="view-wellbeing" class="view">
+      <div class="section-heading"><div><p class="eyebrow">RÉCUPÉRATION</p><h2>Forme & quotidien</h2>
+        <p class="muted">Le contexte qui explique tes séances : sommeil, fatigue, stress, alcool.</p></div></div>
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">7 DERNIERS JOURS</p><h3>Tes moyennes</h3></div></div>
+        <div id="wellbeing-averages"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">CHECK-IN QUOTIDIEN</p><h3>Comment te sens-tu ?</h3></div></div>
+        <form id="wellbeing-form" novalidate>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>Sommeil (heures)<input name="sleep" inputmode="decimal" autocomplete="off" placeholder="7,5"></label>
+            <label>Qualité du sommeil (1 à 5)<input name="sleepQuality" inputmode="numeric" autocomplete="off"></label>
+            <label>Eau (litres)<input name="water" inputmode="decimal" autocomplete="off" placeholder="2"></label>
+            <label>Fatigue (1 à 10)<input name="fatigue" inputmode="numeric" autocomplete="off"></label>
+            <label>Stress (1 à 10)<input name="stress" inputmode="numeric" autocomplete="off"></label>
+            <label>Motivation (1 à 10)<input name="motivation" inputmode="numeric" autocomplete="off"></label>
+            <label>Alcool (verres, si non noté en Nutrition)<input name="alcohol" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+            <label>Douleur autre (0 à 10)<input name="pain" inputmode="numeric" autocomplete="off"></label>
+          </div>
+          <p class="eyebrow">DOULEUR GENOU GAUCHE · TOUS LES 15 JOURS OU SI GÊNE</p>
+          <div class="form-grid three">
+            <label>Avant l'effort (0 à 10)<input name="kneeBefore" inputmode="decimal" autocomplete="off"></label>
+            <label>Pendant (0 à 10)<input name="kneeDuring" inputmode="decimal" autocomplete="off"></label>
+            <label>Le lendemain (0 à 10)<input name="kneeNext" inputmode="decimal" autocomplete="off"></label>
+          </div>
+          <div class="form-grid">
+            <label class="wide">Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="État général, douleur et localisation, sortie, maladie…"></textarea></label>
+          </div>
+          <div class="button-row">
+            <button class="primary-button" type="submit" id="wellbeing-submit">Enregistrer mon check-in</button>
+            <button class="secondary-button" type="button" id="wellbeing-cancel" hidden>Annuler</button>
+          </div>
+        </form>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">HISTORIQUE</p><h3>Check-ins</h3></div></div>
+        <div id="wellbeing-history" class="record-list"></div>
+      </article>
+      <p class="notice">Ce journal est un outil de suivi personnel, pas un dispositif médical. En cas de douleur inhabituelle, importante ou persistante, demande un avis médical.</p>
+    </section>
+
+    <!-- ===================== RÉGLAGES ===================== -->
+    <section id="view-settings" class="view">
+      <div class="section-heading"><div><p class="eyebrow">CONTRÔLE</p><h2>Réglages & données</h2></div></div>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">OBJECTIFS</p><h3>Objectifs quotidiens</h3></div></div>
+        <form id="targets-form" novalidate>
+          <div class="form-grid">
+            <label>Calories (kcal/jour)<input name="kcal" inputmode="numeric" autocomplete="off" placeholder="2200"></label>
+            <label>Protéines (g/jour)<input name="protein" inputmode="numeric" autocomplete="off" placeholder="180"></label>
+            <label>Glucides (g/jour)<input name="carbs" inputmode="numeric" autocomplete="off"></label>
+            <label>Lipides (g/jour)<input name="fat" inputmode="numeric" autocomplete="off"></label>
+            <label>Fibres (g/jour)<input name="fiber" inputmode="numeric" autocomplete="off"></label>
+            <label>Poids cible (kg)<input name="weight" inputmode="decimal" autocomplete="off"></label>
+          </div>
+          <button class="primary-button" type="submit">Enregistrer les objectifs</button>
+          <p class="hint">Laisse vide un objectif que tu ne veux pas suivre.</p>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">PROGRAMME</p><h3>Séances et exercices</h3></div></div>
+        <p class="muted">Rest-pause : quand la 1re série atteint le seuil « Monter à » (reps avant l'échec), l'application propose d'ajouter le palier. Classique : quand toutes les séries atteignent les reps max. Garde le même nom d'exercice pour conserver son historique.</p>
+        <div id="program-editor"></div>
+        <div class="button-row">
+          <button type="button" class="secondary-button" id="program-add-session">+ Nouvelle séance</button>
+          <button type="button" class="primary-button" id="program-save">Enregistrer le programme</button>
+          <button type="button" class="link-button" id="program-reset">Programme d'origine</button>
+        </div>
+      </article>
+
+      <div class="two-column">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">SAUVEGARDE</p><h3>Exporter</h3></div></div>
+          <p class="muted">Tes données n'existent que sur cet appareil. Garde une copie ailleurs (Google Drive, OneDrive, mail).</p>
+          <div class="button-stack">
+            <button type="button" class="primary-button" id="share-backup" hidden>Partager la sauvegarde (Drive, mail…)</button>
+            <button type="button" class="primary-button" id="folder-backup" hidden>Sauvegarde automatique dans un dossier</button>
+            <button type="button" class="secondary-button" id="export-json">Télécharger la sauvegarde (.json)</button>
+            <button type="button" class="secondary-button" id="export-json-photos">Télécharger avec les photos</button>
+            <button type="button" class="secondary-button" id="export-csv">Repas en CSV (Excel)</button>
+            <button type="button" class="secondary-button" id="export-workouts-csv">Séances en CSV (Excel)</button>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">RESTAURATION</p><h3>Importer</h3></div></div>
+          <fieldset class="radio-group">
+            <legend>Mode d'import</legend>
+            <label class="toggle-row"><input type="radio" name="import-mode" value="merge" checked> Fusionner avec les données actuelles (recommandé)</label>
+            <label class="toggle-row"><input type="radio" name="import-mode" value="replace"> Remplacer tout (copie de sécurité téléchargée avant)</label>
+          </fieldset>
+          <label class="file-button">Choisir une sauvegarde JSON<input type="file" id="import-json" accept="application/json,.json"></label>
+          <p class="hint">Chaque entrée est vérifiée avant l'import. Un fichier abîmé ne modifie rien.</p>
+        </article>
+      </div>
+
+      <div class="two-column">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">STOCKAGE</p><h3>État des données</h3></div></div>
+          <div id="storage-info" class="storage-info">Vérification…</div>
+          <div class="button-row">
+            <button type="button" class="secondary-button" id="persist-button" hidden>Protéger mes données</button>
+            <button type="button" class="danger-button" id="clear-data">Tout supprimer</button>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">RAPPEL</p><h3>Rappel du soir</h3></div></div>
+          <label>Heure<input type="time" id="reminder-time" value="21:00"></label>
+          <label class="toggle-row"><input type="checkbox" id="reminder-enabled"> Me rappeler les repas et le check-in manquants</label>
+          <button type="button" class="secondary-button" id="notification-test">Tester la notification</button>
+          <p class="hint">Le rappel est vérifié quand l'application est ouverte. Pour un rappel garanti même application fermée, programme une alarme récurrente sur ton téléphone.</p>
+        </article>
+      </div>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">À SAVOIR</p><h3>Version <span id="app-version"></span></h3></div></div>
+        <ul class="plain-list">
+          <li>Aucun compte, aucun serveur : rien ne quitte l'appareil sans ton action.</li>
+          <li>Pas de synchronisation automatique entre téléphone et PC : utilise l'export puis l'import en mode « Fusionner ».</li>
+          <li>La mini-base alimentaire est indicative ; l'étiquette du produit fait foi.</li>
+          <li>Les conseils de charge suivent une règle simple (rest-pause : reps de la 1re série avant l'échec) : écoute tes sensations et ton coach.</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer><span>PERSONAL PERFORMANCE · VERSION 3</span><span>LOCAL FIRST · AUCUN COMPTE REQUIS</span></footer>
+  </main>
+
+  <div id="rest-pill" class="rest-pill" hidden>
+    <span>Repos</span><b id="rest-pill-time">1:30</b>
+    <button type="button" id="rest-stop">Arrêter</button>
+  </div>
+
+  <dialog id="photo-dialog" class="dialog">
+    <img id="photo-dialog-img" alt="Photo du repas">
+    <button type="button" class="secondary-button" id="photo-dialog-close">Fermer</button>
+  </dialog>
+  <dialog id="summary-dialog" class="dialog">
+    <p>Copie ce texte (appui long → Tout sélectionner → Copier), puis colle-le dans Claude.</p>
+    <textarea id="summary-text" rows="14" readonly></textarea>
+    <button type="button" class="secondary-button" id="summary-close">Fermer</button>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/training.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/body.js"></script>
+  <script src="js/battery.js"></script>
+  <script src="js/wellbeing.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/coach.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
