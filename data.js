@@ -3,9 +3,11 @@
    Données de départ (programme, aliments) et contrôle des données importées.
    ========================================================================== */
 
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.1.0";
 const EXPORT_FORMAT = 3;
 const PROGRAM_SCHEMA = 3;
+/* Réglages synchronisés entre appareils (en plus des entrées). */
+const SYNCED_SETTINGS = ["program", "targets"];
 const MEAL_KINDS = ["Petit-déjeuner", "Déjeuner", "Collation", "Dîner", "Boisson", "Alcool", "Autre"];
 const WEIGH_IN_MOMENTS = ["Soir, avant séance", "Matin à jeun", "Autre"];
 

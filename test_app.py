@@ -2,7 +2,7 @@
 
 Usage (depuis le dossier de l'application) :
     pip install playwright pillow && playwright install chromium
-    python tests/test_app.py
+    python test_app.py
 
 Le script lance son propre petit serveur local, ouvre l'application dans Chromium,
 et vérifie les parcours principaux. Toutes les vérifications doivent être « OK » avant une livraison.
@@ -12,7 +12,7 @@ from playwright.async_api import async_playwright
 from PIL import Image
 import random
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.abspath(__file__))
 TMP = tempfile.mkdtemp(prefix="pp-tests-")
 def free_port():
     with socket.socket() as so:

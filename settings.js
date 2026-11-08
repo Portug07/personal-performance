@@ -231,5 +231,6 @@ function setupSettings() {
 function renderSettings() {
   safeRender("objectifs", renderTargetsForm);
   safeRender("programme", renderProgramEditor);
+  safeRender("synchronisation", renderSyncPanel);
   renderStorageInfo().catch(console.error);
 }

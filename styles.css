@@ -164,6 +164,10 @@ label { display: grid; gap: 6px; color: #c4cdbf; font-size: 13px; }
 .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .form-grid + .eyebrow { margin: 4px 0 8px; }
 .trend-good { color: var(--accent); }
+.sync-status { font-weight: 700; margin: 6px 0; }
+.sync-status.sync-ok { color: var(--accent); }
+.sync-status.sync-error, .sync-status.sync-auth { color: var(--danger); }
+#sync-connect-form textarea { font-family: ui-monospace, monospace; font-size: 13px; resize: vertical; }
 .trend-bad { color: var(--danger); }
 input, select, textarea {
   width: 100%; min-width: 0; min-height: 44px; background: #111611; border: 1px solid #394339; color: var(--text);
@@ -278,6 +282,8 @@ textarea { resize: vertical; }
 .food-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 14px; }
 .food-chip { border: 1px solid var(--line); background: var(--panel2); color: var(--text); padding: 8px 12px; border-radius: 20px; font-size: 13px; min-height: 38px; text-align: left; }
 .food-chip.history { border-color: var(--accent-dark); }
+.food-chip.ciqual { border-style: dashed; }
+.food-suggestions .hint { margin: 4px 0 0; }
 .meal-group { display: grid; gap: 8px; margin-bottom: 14px; }
 .meal-group-head { display: flex; justify-content: space-between; color: var(--accent); font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
 .thumb { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); padding: 0; background: #111611; }
@@ -376,3 +382,13 @@ footer { display: flex; justify-content: space-between; color: #657061; font-siz
   .set-rp input { padding-right: 24px; }
   .quick-action { grid-template-columns: 22px 1fr; }
 }
+
+/* ---------- Scan code-barres ---------- */
+.scan-row { align-items: center; gap: 8px 12px; margin: -4px 0 14px; }
+.scan-row .hint { flex: 1 1 220px; margin: 0; }
+.scan-dialog { width: min(92vw, 520px); }
+.scan-dialog h3 { margin: 0 0 10px; outline: none; }
+.scan-view { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #000; border-radius: 12px; overflow: hidden; }
+.scan-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-frame { position: absolute; left: 8%; right: 8%; top: 28%; bottom: 28%; border: 2px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 999px #0007; pointer-events: none; }
+.scan-manual { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin: 8px 0 12px; }

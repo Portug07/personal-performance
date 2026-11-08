@@ -145,8 +145,43 @@ async function viewPhoto(photoId) {
   dialog.showModal();
 }
 
-/* ---------- Suggestions : aliments déjà mangés + mini-base ---------- */
+/* ---------- Suggestions : aliments déjà mangés, mini-base, table Ciqual ---------- */
 
+/* Table Ciqual (Anses) : ~3 300 aliments génériques, valeurs pour 100 g. Fichier ciqual.json chargé
+   à la première recherche puis gardé par l'app : il marche hors connexion. */
+let ciqualFoods = null;          // [{ name, words, per100, group }]
+let ciqualLoading = null;
+const foodWords = (text) => fold(String(text ?? "").replace(/œ/gi, "oe").replace(/æ/gi, "ae")).split(/[^a-z0-9]+/).filter(Boolean);
+function loadCiqual() {
+  if (ciqualFoods || ciqualLoading) return ciqualLoading;
+  ciqualLoading = fetch("ciqual.json")
+    .then((res) => { if (!res.ok) throw new Error(`ciqual.json : ${res.status}`); return res.json(); })
+    .then((data) => {
+      const groups = Array.isArray(data.groups) ? data.groups : [];
+      ciqualFoods = (Array.isArray(data.foods) ? data.foods : []).map(([name, kcal, protein, carbs, fat, fiber, g]) => ({
+        name: cleanText(name, 120), words: foodWords(name), group: cleanText(groups[g], 60),
+        per100: cleanPer100({ kcal, protein, carbs, fat, fiber })
+      })).filter((f) => f.name && f.per100);
+      if (mealForm().elements.name.value.trim().length >= 2) renderFoodSuggestions();
+    })
+    .catch((err) => { console.warn(err); ciqualLoading = null; });
+  return ciqualLoading;
+}
+/* Chaque mot tapé doit commencer un mot de l'aliment (« riz » trouve « Riz basmati », pas « chorizo »).
+   Score plus bas = meilleur : mots trouvés tôt dans le nom, puis noms courts. */
+function foodScore(words, name, query) {
+  let score = 0;
+  for (const q of query) {
+    const idx = words.findIndex((w) => w.startsWith(q));
+    if (idx < 0) return -1;
+    score += idx === 0 ? 0 : 1 + idx * 0.05;
+  }
+  return score + name.length / 300;
+}
+function searchFoodList(list, query, max, wordsOf = (f) => f.words || foodWords(f.name)) {
+  return list.map((f) => ({ f, s: foodScore(wordsOf(f), f.name, query) }))
+    .filter((x) => x.s >= 0).sort((a, b) => a.s - b.s).slice(0, max).map((x) => x.f);
+}
 function historyFoods() {
   const seen = new Map();
   state.recentMeals.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach((m) => {
@@ -156,13 +191,20 @@ function historyFoods() {
   return [...seen.values()];
 }
 function renderFoodSuggestions() {
-  const q = fold(mealForm().elements.name.value);
+  const raw = mealForm().elements.name.value;
+  const query = foodWords(raw);
   const out = document.getElementById("food-suggestions");
-  if (q.length < 2) { out.innerHTML = ""; return; }
-  const fromHistory = historyFoods().filter((m) => fold(m.name).includes(q)).slice(0, 5);
-  const fromBase = FOODS.filter((f) => fold(f.name).includes(q)).slice(0, 6);
+  if (fold(raw).length < 2 || !query.length) { out.innerHTML = ""; return; }
+  if (!ciqualFoods) loadCiqual();
+  const fromHistory = searchFoodList(historyFoods(), query, 4);
+  const fromBase = searchFoodList(FOODS, query, 3);
+  const taken = new Set([...fromHistory, ...fromBase].map((f) => fold(f.name)));
+  const fromCiqual = ciqualFoods ? searchFoodList(ciqualFoods, query, 8).filter((f) => !taken.has(fold(f.name))) : [];
   out.innerHTML = fromHistory.map((m) => `<button type="button" class="food-chip history" data-history="${esc(m.id)}">${esc(m.name)} · ${fmt(m.kcal, 0)} kcal${m.grams ? ` (${fmt(m.grams, 0)} g)` : ""}</button>`).join("")
-    + fromBase.map((f) => `<button type="button" class="food-chip" data-food="${esc(f.name)}">${esc(f.name)} · ${fmt(f.per100.kcal, 0)} kcal/100 g</button>`).join("");
+    + fromBase.map((f) => `<button type="button" class="food-chip" data-food="${esc(f.name)}">${esc(f.name)} · ${fmt(f.per100.kcal, 0)} kcal/100 g</button>`).join("")
+    + fromCiqual.map((f) => `<button type="button" class="food-chip ciqual" data-ciqual="${ciqualFoods.indexOf(f)}" title="${esc(f.group)}">${esc(f.name)} · ${fmt(f.per100.kcal, 0)} kcal/100 g</button>`).join("")
+    + (fromHistory.length + fromBase.length + fromCiqual.length === 0 && ciqualFoods
+      ? `<p class="hint">Rien trouvé : essaie un mot plus court (« poulet », « yaourt »), scanne l'emballage, ou saisis l'étiquette.</p>` : "");
 }
 function fillMacros(values) {
   const form = mealForm();
@@ -392,6 +434,7 @@ function setupNutrition() {
     const b = e.target.closest("button");
     if (!b) return;
     if (b.dataset.food) { const f = FOODS.find((x) => x.name === b.dataset.food); if (f) chooseFood(f); }
+    if (b.dataset.ciqual && ciqualFoods) { const f = ciqualFoods[Number(b.dataset.ciqual)]; if (f) chooseFood(f); }
     if (b.dataset.history) { const m = state.recentMeals.find((x) => x.id === b.dataset.history); if (m) chooseHistoryMeal(m); }
   });
   form.elements.photo.addEventListener("change", (e) => {

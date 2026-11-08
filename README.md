@@ -1,6 +1,22 @@
-# Personal Performance — version 3
+# Personal Performance — version 3.1
 
-Application personnelle de suivi sportif et nutritionnel. Interface en français, pensée pour le téléphone, sans compte, sans API et sans serveur. Les données restent sur l'appareil.
+Application personnelle de suivi sportif et nutritionnel. Interface en français, pensée pour le téléphone, sans abonnement, sans API payante et sans serveur à payer. Les données restent sur l'appareil ; la synchronisation entre appareils est facultative et passe par ton propre projet Firebase gratuit.
+
+## Nouveautés de la version 3.1
+
+**Synchronisation automatique téléphone ↔ PC (gratuite, facultative)**
+- Passe par ton propre projet Firebase (offre gratuite « Spark », sans carte bancaire). Personne d'autre n'y a accès.
+- Chaque saisie part toute seule quelques secondes après (et dès que le réseau revient). L'autre appareil la reçoit à l'ouverture, au retour sur l'app, ou avec « Synchroniser maintenant ».
+- Hors connexion, tout fonctionne comme avant : les changements attendent le réseau.
+- Deux modifications de la même entrée : la plus récente gagne. Une suppression est transmise.
+- Synchronisés : séances, repas, mesures, check-ins, batteries de tests, programme, objectifs. Non synchronisés : les photos (elles restent sur l'appareil où tu les prends).
+- Le mot de passe n'est jamais enregistré ; seule une clé de session l'est. « Déconnecter » n'efface rien.
+- Réglages → Synchronisation : coller le bloc `firebaseConfig`, l'e-mail et le mot de passe du compte, sur chaque appareil.
+
+**Base d'aliments**
+- Table Ciqual 2025 de l'Anses : 3 341 aliments génériques (valeurs pour 100 g), cherchés en tapant le nom, même hors connexion. Chaque mot tapé doit commencer un mot de l'aliment : « riz cuit », « poulet roti », « yaourt nature ».
+- Scan du code-barres des produits emballés : nom, calories et macros pour 100 g remplis depuis Open Food Facts (base collaborative gratuite, réseau nécessaire). Portion indiquée sur l'emballage reprise quand elle existe. Produits déjà scannés retrouvés hors connexion.
+- La caméra est lue sur l'appareil, aucune image n'est envoyée ; seul le numéro du code part vers Open Food Facts. Sans caméra (ou si tu la refuses), tu peux taper le numéro.
 
 ## Nouveautés de la version 3 (alignement avec l'agent coach)
 
@@ -90,26 +106,38 @@ Ensuite : ouvrir l'adresse dans Chrome Android → menu ⋮ → « Installer l'a
 | `index.html` | Les écrans |
 | `styles.css` | L'apparence |
 | `sw.js` | Le mode hors ligne et les mises à jour |
-| `js/utils.js` | Outils : dates, nombres, messages |
-| `js/data.js` | Programme et aliments par défaut, contrôle des imports |
-| `js/db.js` | La base de données locale et sa migration |
-| `js/charts.js` | Les graphiques |
-| `js/training.js` | Séances, progression, records, minuteur |
-| `js/nutrition.js` | Repas, objectifs, photos |
-| `js/body.js` | Poids et mensurations |
-| `js/battery.js` | Batterie de tests (toutes les 4 semaines) |
-| `js/wellbeing.js` | Récupération |
-| `js/dashboard.js` | Accueil, bilan, « Copier pour Claude » |
-| `js/coach.js` | Récap du jour et export JSON pour l'agent coach |
-| `js/backup.js` | Exports, imports, stockage |
-| `js/settings.js` | Objectifs, programme, rappel |
-| `js/app.js` | Démarrage et navigation |
-| `tests/test_app.py` | Tests automatiques (77 vérifications) |
+| `utils.js` | Outils : dates, nombres, messages |
+| `data.js` | Programme et aliments par défaut, contrôle des imports |
+| `db.js` | La base de données locale et sa migration |
+| `charts.js` | Les graphiques |
+| `training.js` | Séances, progression, records, minuteur |
+| `nutrition.js` | Repas, objectifs, photos, recherche d'aliments |
+| `scan.js` | Scan du code-barres et recherche Open Food Facts |
+| `ciqual.json` | Table Ciqual 2025 (Anses), version compacte pour la recherche hors connexion |
+| `body.js` | Poids et mensurations |
+| `battery.js` | Batterie de tests (toutes les 4 semaines) |
+| `wellbeing.js` | Récupération |
+| `dashboard.js` | Accueil, bilan, « Copier pour Claude » |
+| `coach.js` | Récap du jour et export JSON pour l'agent coach |
+| `backup.js` | Exports, imports, stockage |
+| `settings.js` | Objectifs, programme, rappel |
+| `sync.js` | Synchronisation entre appareils (Firebase) |
+| `app.js` | Démarrage et navigation |
+| `test_app.py` | Tests automatiques de l'application (77 vérifications) |
+| `test_sync.py` | Tests de la synchronisation, avec un faux Firebase (30 vérifications) |
+| `test_scan.py` | Tests de la base d'aliments et du scan, caméra simulée (40 vérifications, nécessite ffmpeg) |
 | `CLAUDE.md` | Règles à suivre pour faire évoluer l'application avec Claude Code |
 
 ## Limites
 
-- Pas de synchronisation automatique entre téléphone et PC (export puis import « Fusionner »).
+- La synchronisation demande un projet Firebase (gratuit) ; sans lui, export puis import « Fusionner ». Les photos ne sont pas synchronisées.
+- Le scan du code-barres a besoin du réseau la première fois pour chaque produit ; un produit absent d'Open Food Facts se saisit à la main.
+- Firebase gratuit : 50 000 lectures et 20 000 écritures par jour, très au-dessus d'un usage personnel. Au-delà, la synchro s'arrête jusqu'au lendemain (jamais de facture : l'offre Spark n'a pas de carte bancaire).
 - Le rappel du soir n'est vérifié que si l'application est ouverte ; une alarme du téléphone est plus sûre.
-- La mini-base alimentaire est indicative ; l'étiquette du produit fait foi.
+- Ciqual et la mini-base donnent des valeurs moyennes ; l'étiquette du produit fait foi.
+
+## Sources des données d'aliments
+
+- **Table Ciqual** : Anses, Table de composition nutritionnelle des aliments Ciqual 2025 (version du 03/11/2025), données publiques ouvertes. Fichier converti à partir de la copie publiée dans le dépôt d'Open Food Facts ; seuls l'énergie (kcal, règlement UE 1169/2011), les protéines, glucides, lipides et fibres sont gardés. « traces » = 0, « < x » = x/2.
+- **Open Food Facts** : base collaborative libre (licence ODbL), interrogée produit par produit.
 - Pas de conseil médical ni de diagnostic.

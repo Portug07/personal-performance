@@ -2,7 +2,7 @@
 /* ==========================================================================
    Batterie de tests (toutes les 4 semaines, conditions identiques) :
    saisie, comparaison avec le premier test (référence) et le précédent.
-   Les champs sont définis dans js/data.js (BATTERY_FIELDS).
+   Les champs sont définis dans data.js (BATTERY_FIELDS).
    ========================================================================== */
 
 function batteryForm() { return document.getElementById("battery-form"); }

@@ -167,6 +167,7 @@ async function init() {
   }
   state.day = today();
   state.nutritionDate = today();
+  await loadSyncAccount();
   const storedProgram = normalizeProgram(await getSetting("program", null));
   if (storedProgram) {
     /* Programme d'une version précédente : passage au rest-pause et ajout du Reverse butterfly (une seule fois). */
@@ -180,6 +181,7 @@ async function init() {
 
   setupTraining();
   setupNutrition();
+  setupScan();
   setupProgress();
   setupWellbeing();
   setupDashboard();
@@ -187,6 +189,7 @@ async function init() {
   setupBattery();
   setupBackup();
   setupSettings();
+  setupSync();
   setupInstall();
   document.body.addEventListener("click", (e) => { onGlobalClick(e).catch((err) => showToast(humanError(err), "error")); });
 
@@ -206,6 +209,7 @@ async function init() {
   requestPersistence().catch(() => {});
   autoFolderBackup().catch(() => {});
   checkReminder().catch(console.error);
+  startSync();
   setInterval(() => { checkDayChange(); checkReminder().catch(console.error); }, 60000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") { checkDayChange(); checkReminder().catch(console.error); if (restTimer.end) tickRestTimer(); }

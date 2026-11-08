@@ -147,6 +147,7 @@ async function importBackup(file, mode) {
       ? `REMPLACER : les ${fmt(current, 0)} entrées actuelles seront remplacées. Une copie de sécurité va d'abord être téléchargée.`
       : `FUSIONNER : les entrées du fichier s'ajoutent aux ${fmt(current, 0)} actuelles ; en cas de doublon, la version la plus récente est gardée.`
   ];
+  if (syncTracking) lines.push(mode === "replace" ? "Synchro active : le remplacement s'appliquera aussi à tes autres appareils." : "Synchro active : les entrées ajoutées iront aussi sur tes autres appareils.");
   if (!confirm(`Importer cette sauvegarde ?\n\n${lines.join("\n")}`)) return;
 
   if (mode === "replace") {
@@ -239,10 +240,11 @@ function setupBackup() {
     renderStorageInfo().catch(console.error);
   });
   document.getElementById("clear-data").addEventListener("click", (e) => withBusy(e.currentTarget, async () => {
-    if (!confirm("ATTENTION : supprimer toutes les séances, repas, mesures, check-ins et photos de cet appareil ?\nTon programme et tes objectifs sont conservés.")) return;
+    if (!confirm(`ATTENTION : supprimer toutes les séances, repas, mesures, check-ins et photos de cet appareil ?\nTon programme et tes objectifs sont conservés.${syncTracking ? "\n\nLa synchronisation sera déconnectée sur cet appareil : tes données restent dans Firebase et sur tes autres appareils." : ""}`)) return;
     if (!confirm("Dernière confirmation : une copie de sécurité va être téléchargée, puis tout sera supprimé. Continuer ?")) return;
     const { blob, count } = await buildBackupBlob({ includePhotos: true });
     if (count) downloadBlob(backupFilename("-avant-suppression"), blob);
+    if (syncTracking) await disconnectSync();
     await clearAllEntries();
     await reloadAll();
     showToast("Toutes les entrées ont été supprimées.");

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Politique de sécurité : seuls les fichiers de l'application peuvent s'exécuter, aucun envoi vers Internet (audit I1). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://world.openfoodfacts.org; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#111511">
   <meta name="description" content="Suivi personnel de l'entraînement, de la nutrition et de la progression.">
   <title>Personal Performance</title>
@@ -200,6 +200,10 @@
             <label>Repas<select name="kind"></select></label>
             <label class="wide">Aliment / description<input name="name" maxlength="120" autocomplete="off" placeholder="Tape au moins 2 lettres : skyr, riz, poulet…"></label>
           </div>
+          <div class="button-row scan-row">
+            <button class="secondary-button" type="button" id="scan-open">Scanner un code-barres</button>
+            <span class="hint">Ou tape un nom : tes aliments déjà saisis + 3 300 aliments de la table Ciqual (Anses), même hors connexion.</span>
+          </div>
           <div id="food-suggestions" class="food-suggestions"></div>
           <div id="alcohol-fields" hidden>
             <div id="alcohol-presets" class="food-suggestions"></div>
@@ -380,6 +384,30 @@
         </form>
       </article>
 
+      <article class="panel" id="sync-panel">
+        <div class="panel-heading"><div><p class="eyebrow">SYNCHRONISATION</p><h3>Téléphone et PC</h3>
+          <p class="muted">Tes entrées, ton programme et tes objectifs se synchronisent automatiquement entre tes appareils, via ton projet Firebase gratuit. Les photos restent sur l'appareil où tu les prends.</p></div></div>
+        <form id="sync-connect-form" novalidate>
+          <label>Configuration Firebase (bloc « firebaseConfig »)<textarea name="config" rows="4" spellcheck="false" autocomplete="off"></textarea></label>
+          <div class="form-grid">
+            <label>E-mail du compte Firebase<input name="email" type="email" autocomplete="username"></label>
+            <label>Mot de passe<input name="password" type="password" autocomplete="current-password"></label>
+          </div>
+          <button class="primary-button" type="submit">Se connecter et synchroniser</button>
+          <p class="hint">À faire une fois sur chaque appareil. Le mot de passe n'est pas enregistré : l'appareil garde seulement une clé de session.</p>
+        </form>
+        <div id="sync-connected" hidden>
+          <p id="sync-account" class="muted"></p>
+          <p id="sync-status" class="sync-status"></p>
+          <p id="sync-message" class="hint" hidden></p>
+          <div class="button-row">
+            <button type="button" class="primary-button" id="sync-now">Synchroniser maintenant</button>
+            <button type="button" class="secondary-button" id="sync-relogin" hidden>Me reconnecter</button>
+            <button type="button" class="link-button" id="sync-disconnect">Déconnecter cet appareil</button>
+          </div>
+        </div>
+      </article>
+
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">PROGRAMME</p><h3>Séances et exercices</h3></div></div>
         <p class="muted">Rest-pause : quand la 1re série atteint le seuil « Monter à » (reps avant l'échec), l'application propose d'ajouter le palier. Classique : quand toutes les séries atteignent les reps max. Garde le même nom d'exercice pour conserver son historique.</p>
@@ -453,6 +481,19 @@
     <button type="button" id="rest-stop">Arrêter</button>
   </div>
 
+  <dialog id="scan-dialog" class="dialog scan-dialog">
+    <h3 tabindex="-1" autofocus>Scanner un code-barres</h3>
+    <div id="scan-view" class="scan-view">
+      <video id="scan-video" autoplay muted playsinline></video>
+      <div class="scan-frame"></div>
+    </div>
+    <p class="hint" id="scan-status"></p>
+    <form id="scan-manual" class="scan-manual" novalidate>
+      <label>Ou tape le numéro sous le code-barres<input name="code" inputmode="numeric" autocomplete="off" maxlength="16" placeholder="13 chiffres"></label>
+      <button class="secondary-button" type="submit">Chercher</button>
+    </form>
+    <div class="button-row"><button class="secondary-button" type="button" id="scan-close">Fermer</button></div>
+  </dialog>
   <dialog id="photo-dialog" class="dialog">
     <img id="photo-dialog-img" alt="Photo du repas">
     <button type="button" class="secondary-button" id="photo-dialog-close">Fermer</button>
@@ -471,6 +512,7 @@
   <script src="charts.js"></script>
   <script src="training.js"></script>
   <script src="nutrition.js"></script>
+  <script src="scan.js"></script>
   <script src="body.js"></script>
   <script src="battery.js"></script>
   <script src="wellbeing.js"></script>
@@ -478,6 +520,7 @@
   <script src="coach.js"></script>
   <script src="backup.js"></script>
   <script src="settings.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
