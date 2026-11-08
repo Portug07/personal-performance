@@ -2,12 +2,12 @@
    Service worker : rend l'application disponible hors connexion.
    RÈGLE : à chaque livraison, augmenter VERSION. Sinon le téléphone garde l'ancienne version (audit C3).
    ========================================================================== */
-const VERSION = "3.1.0";
+const VERSION = "3.3.0";
 const CACHE_NAME = `personal-performance-${VERSION}`;
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./manifest.json", "./icon.svg",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
-  "./utils.js", "./data.js", "./db.js", "./charts.js", "./training.js", "./nutrition.js", "./scan.js",
+  "./utils.js", "./data.js", "./db.js", "./charts.js", "./training.js", "./session.js", "./nutrition.js", "./scan.js", "./quickmeals.js", "./recipes.js",
   "./body.js", "./battery.js", "./wellbeing.js", "./dashboard.js", "./coach.js", "./backup.js", "./settings.js", "./sync.js", "./app.js", "./ciqual.json"
 ];
 

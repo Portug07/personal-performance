@@ -289,6 +289,22 @@ async def main():
         await connect(B)
         check("Reconnexion du PC : tout revient depuis Firebase", await B.evaluate("state.workouts.length") == 1 and await B.evaluate("state.recentMeals.length") >= 2)
 
+
+        # ---------- Version 3.2 : recettes et repas habituels synchronisés ----------
+        await A.evaluate("""saveRecords([
+          {id:'rec1',type:'recipe',date:today(),name:'Curry maison',ingredients:[{name:'Poulet',grams:600,per100:{kcal:120,protein:23,carbs:0,fat:3,fiber:0}},{name:'Riz',grams:300,per100:{kcal:350,protein:7,carbs:77,fat:1,fiber:1}}],cookedGrams:1500},
+          {id:'tpl1',type:'mealTemplate',date:today(),name:'Petit-déj salle',kind:'Petit-déjeuner',items:[{kind:'Petit-déjeuner',name:'Skyr',grams:200,kcal:120,protein:21,carbs:8,fat:0,fiber:0}]}
+        ]).then(() => reloadAll())""")
+        await A.wait_for_timeout(3500)
+        await B.evaluate("syncNow({manual:true})"); await B.wait_for_timeout(1200)
+        got = await B.evaluate("[state.recipes.map(r => [r.name, Math.round(recipePer100(r).kcal)]), state.mealTemplates.map(t => t.name)]")
+        check("Recette et repas habituel créés sur le téléphone : reçus sur le PC", got == [[["Curry maison", 118]], ["Petit-déj salle"]], got)
+        # Une ancienne version (3.1) a pu ignorer ces fiches : à la mise à jour, tout Firebase est relu une fois.
+        await B.evaluate("""(async () => { await deleteRecord('rec1'); await setSetting('syncDirty', {}); const a = await getSetting('syncAccount');
+          delete a.typesVersion; await setSetting('syncAccount', a); })()""")
+        await B.reload(); await B.wait_for_timeout(2500)
+        check("Mise à jour depuis la 3.1 : fiches ignorées autrefois récupérées", await B.evaluate("state.recipes.some(r => r.id === 'rec1')") and (await B.evaluate("getSetting('syncAccount')"))["typesVersion"] == 2)
+
         check("Aucune erreur JavaScript", not errors, errors[:5])
         print("Appels simulés :", fake.calls)
         await b.close()

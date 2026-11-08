@@ -180,8 +180,11 @@ async function init() {
   state.targets = { ...DEFAULT_TARGETS, ...(await getSetting("targets", {})) };
 
   setupTraining();
+  setupSessionMode();
   setupNutrition();
   setupScan();
+  setupQuickMeals();
+  setupRecipes();
   setupProgress();
   setupWellbeing();
   setupDashboard();
@@ -195,7 +198,7 @@ async function init() {
 
   await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery()]);
   renderSessionOptions();
-  if (restoreWorkoutDraft()) showToast("Séance en cours restaurée.");
+  if (restoreWorkoutDraft()) { showToast("Séance en cours restaurée."); resumeSessionMode(); }
   else resetWorkoutForm();
   resetMealForm();
   resetMeasurementForm();
@@ -212,7 +215,7 @@ async function init() {
   startSync();
   setInterval(() => { checkDayChange(); checkReminder().catch(console.error); }, 60000);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { checkDayChange(); checkReminder().catch(console.error); if (restTimer.end) tickRestTimer(); }
+    if (document.visibilityState === "visible") { checkDayChange(); checkReminder().catch(console.error); if (restTimer.end) tickRestTimer(); if (restTimer.end || sessionModeOpen()) keepScreenOn(true); }
   });
 }
 

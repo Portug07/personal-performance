@@ -1,6 +1,24 @@
-# Personal Performance — version 3.1
+# Personal Performance — version 3.3
 
 Application personnelle de suivi sportif et nutritionnel. Interface en français, pensée pour le téléphone, sans abonnement, sans API payante et sans serveur à payer. Les données restent sur l'appareil ; la synchronisation entre appareils est facultative et passe par ton propre projet Firebase gratuit.
+
+## Nouveautés de la version 3.3
+
+- **Exercices au poids du corps** : pompes, tractions, dips, gainage… sont reconnus à leur nom (bouton « Poids du corps » sur chaque exercice pour corriger). La case de charge devient « lest », facultative : vide = poids du corps. Affichage « PDC × 20 » ou « PDC+10 × 8 ». Records et courbe de progression en reps. Le mode séance suit (« Lest (facultatif) »).
+- **Il te reste…** (Nutrition, jour en cours, si tes objectifs sont réglés) : calories et protéines restantes, avec 4 idées parmi tes aliments les plus protéinés qui rentrent dans les calories restantes (portion réduite si besoin). Si tu n'as encore rien noté de protéiné : classiques de la mini-base (skyr, poulet, dinde, thon…). Un appui pré-remplit le formulaire.
+- **Nutri-Score et NOVA** au scan d'un produit (Open Food Facts) : affichés sous le formulaire, gardés sur l'entrée (badges dans le journal) et dans l'export pour le coach.
+
+## Nouveautés de la version 3.2
+
+**En salle**
+- **Mode séance plein écran** (bouton dans « Nouvelle séance ») : un exercice à la fois, gros boutons + / −, charge et reps de la dernière fois proposées en gris. En rest-pause : « Échec → pause 20 s », puis « Complément fait → repos ». Sans rien toucher, deux appuis notent une série identique à la dernière fois. Passage tout seul à l'exercice suivant. Tout arrive dans le formulaire (brouillon compris) : on enregistre comme d'habitude. Si le téléphone ferme l'app, le mode séance revient au même exercice.
+- **Minuteur** : boutons « Pause RP » (durée du programme, 20 s par défaut) et « Repos » sur chaque exercice, +15 s, barre de progression. L'écran reste allumé pendant le décompte ; fin = vibration + 3 bips. Le décompte continue si l'app est fermée puis rouverte. Option automatique : pause RP après les reps avant l'échec, repos après le complément.
+
+**Nutrition**
+- **Repas habituels** : « ★ Habituel » à côté d'un repas du jour l'enregistre (nom, moment, aliments) ; ensuite un appui dans « Ajout rapide » l'ajoute au jour affiché. « Gérer » pour renommer, retirer un aliment ou supprimer.
+- **Comme hier** : copie en un appui le petit-déjeuner, le déjeuner… ou toute la journée de la veille. Chaque ajout rapide peut être annulé depuis le message.
+- **Recettes maison** : ingrédients pesés crus (Ciqual, tes aliments, code-barres ou saisie à la main) + poids du plat cuit → valeurs pour 100 g. La recette sort ensuite en premier dans la recherche d'aliments : tu pèses ta portion, les calories suivent.
+- Repas habituels et recettes sont sauvegardés et synchronisés comme le reste.
 
 ## Nouveautés de la version 3.1
 
@@ -110,9 +128,12 @@ Ensuite : ouvrir l'adresse dans Chrome Android → menu ⋮ → « Installer l'a
 | `data.js` | Programme et aliments par défaut, contrôle des imports |
 | `db.js` | La base de données locale et sa migration |
 | `charts.js` | Les graphiques |
+| `session.js` | Mode séance plein écran |
 | `training.js` | Séances, progression, records, minuteur |
 | `nutrition.js` | Repas, objectifs, photos, recherche d'aliments |
 | `scan.js` | Scan du code-barres et recherche Open Food Facts |
+| `quickmeals.js` | « Il te reste… », repas habituels et « Comme hier » |
+| `recipes.js` | Recettes maison |
 | `ciqual.json` | Table Ciqual 2025 (Anses), version compacte pour la recherche hors connexion |
 | `body.js` | Poids et mensurations |
 | `battery.js` | Batterie de tests (toutes les 4 semaines) |
@@ -124,8 +145,9 @@ Ensuite : ouvrir l'adresse dans Chrome Android → menu ⋮ → « Installer l'a
 | `sync.js` | Synchronisation entre appareils (Firebase) |
 | `app.js` | Démarrage et navigation |
 | `test_app.py` | Tests automatiques de l'application (77 vérifications) |
-| `test_sync.py` | Tests de la synchronisation, avec un faux Firebase (30 vérifications) |
+| `test_sync.py` | Tests de la synchronisation, avec un faux Firebase (32 vérifications) |
 | `test_scan.py` | Tests de la base d'aliments et du scan, caméra simulée (40 vérifications, nécessite ffmpeg) |
+| `test_features.py` | Tests des versions 3.2 et 3.3 : minuteur, mode séance, repas habituels, recettes, poids du corps, « Il te reste », Nutri-Score (72 vérifications) |
 | `CLAUDE.md` | Règles à suivre pour faire évoluer l'application avec Claude Code |
 
 ## Limites

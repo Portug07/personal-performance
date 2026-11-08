@@ -125,13 +125,29 @@ function humanError(err) {
   return "Une erreur est survenue. Rien n'a été enregistré.";
 }
 let toastTimer = null;
-function showToast(message, kind = "ok") {
+/* Message bref en bas de l'écran. action = { label, run } ajoute un bouton (ex. « Annuler »). */
+function showToast(message, kind = "ok", action = null) {
   const el = document.getElementById("toast");
   if (!el) return;
+  /* Une fenêtre ouverte (mode séance, recette…) passe au-dessus de tout : le message s'affiche dedans. */
+  const open = [...document.querySelectorAll("dialog[open]")];
+  const host = open.length ? open[open.length - 1] : document.body;
+  if (el.parentElement !== host) host.appendChild(el);
   el.textContent = message;
-  el.className = `toast show ${kind === "error" ? "toast-error" : ""}`;
+  if (action) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = action.label;
+    btn.addEventListener("click", () => {
+      el.classList.remove("show", "has-action");
+      Promise.resolve(action.run()).catch((err) => showToast(humanError(err), "error"));
+    }, { once: true });
+    el.append(" ", btn);
+  }
+  el.className = `toast show ${kind === "error" ? "toast-error" : ""} ${action ? "has-action" : ""}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), kind === "error" ? 5000 : 2800);
+  toastTimer = setTimeout(() => el.classList.remove("show", "has-action"), action ? 6000 : (kind === "error" ? 5000 : 2800));
 }
 /* Désactive le bouton pendant l'action : évite les doublons (audit I5) et affiche les erreurs. */
 async function withBusy(button, action) {

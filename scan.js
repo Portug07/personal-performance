@@ -189,9 +189,13 @@ function productFromOff(code, p) {
     fat: offNumber(n.fat_100g) ?? 0, fiber: offNumber(n.fiber_100g) ?? 0
   });
   const serving = offNumber(p.serving_quantity);
+  const grade = String(p.nutriscore_grade || "").toLowerCase();
+  const nova = Number(p.nova_group);
   return {
     code, name, per100,
     servingG: serving !== null && serving >= 1 && serving <= 2000 ? round(serving, 0) : null,
+    nutriscore: /^[a-e]$/.test(grade) ? grade : null,
+    nova: Number.isInteger(nova) && nova >= 1 && nova <= 4 ? nova : null,
     savedAt: Date.now()
   };
 }
@@ -213,7 +217,7 @@ async function fetchFoodByBarcode(code) {
     if (cached) return cached;
     throw new UserError("Pas de réseau : la recherche du produit a besoin d'internet. Saisis l'étiquette, ou rescanne plus tard.");
   }
-  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,product_name_fr,generic_name,generic_name_fr,brands,serving_quantity,nutriments`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,product_name_fr,generic_name,generic_name_fr,brands,serving_quantity,nutriments,nutriscore_grade,nova_group`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), OFF_TIMEOUT_MS);
   let res;
@@ -320,7 +324,10 @@ async function scanFrame() {
   }
   if (scanStream) scanTimer = setTimeout(scanFrame, 120);
 }
-async function openScanDialog() {
+/* onProduct : où envoyer le produit trouvé (formulaire de repas par défaut, ou une recette). */
+let scanOnProduct = null;
+async function openScanDialog(onProduct = null) {
+  scanOnProduct = typeof onProduct === "function" ? onProduct : null;
   const dialog = document.getElementById("scan-dialog");
   document.getElementById("scan-manual").elements.code.value = "";
   dialog.showModal();
@@ -328,8 +335,10 @@ async function openScanDialog() {
 }
 /* Produit trouvé : nom, valeurs pour 100 g et portion vont dans le formulaire ; les grammes restent modifiables. */
 function applyScannedProduct(product) {
+  if (scanOnProduct) { scanOnProduct(product); return; }
   const form = mealForm();
   form.elements.name.value = product.name;
+  setMealProduct(product);
   document.getElementById("food-suggestions").innerHTML = "";
   if (!product.per100) {
     mealPer100 = null;
@@ -359,8 +368,9 @@ async function lookupBarcode(raw) {
     }
     applyScannedProduct(product);
     document.getElementById("scan-dialog").close();
+    const scores = productScoresText(product);
     showToast(product.per100
-      ? `${product.name} : ${fmt(product.per100.kcal, 0)} kcal pour 100 g. Vérifie les grammes.`
+      ? `${product.name} : ${fmt(product.per100.kcal, 0)} kcal pour 100 g${scores ? ` · ${scores}` : ""}. Vérifie les grammes.`
       : `${product.name} trouvé, mais sans valeurs nutritionnelles : saisis l'étiquette.`, product.per100 ? "ok" : "error");
   } catch (err) {
     if (!err.userMessage) console.error(err);
@@ -371,7 +381,7 @@ function setupScan() {
   const dialog = document.getElementById("scan-dialog");
   document.getElementById("scan-open").addEventListener("click", () => { openScanDialog().catch(console.error); });
   document.getElementById("scan-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", stopScanCamera);
+  dialog.addEventListener("close", () => { stopScanCamera(); scanOnProduct = null; });
   document.getElementById("scan-manual").addEventListener("submit", (e) => {
     e.preventDefault();
     stopScanCamera();

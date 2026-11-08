@@ -108,6 +108,8 @@ Un jour sans saisie donne : `Aucune donnée saisie ce jour.`
 Champs possibles en plus :
 
 - `alcool_declare_verres` : verres déclarés au check-in, seulement les jours sans entrée « Alcool » dans Nutrition.
+- `seances[].exercices[].poids_du_corps: true` : exercice au poids du corps (pompes, tractions…). `charge_kg` y est alors le lest ajouté (absent = sans lest).
+- `repas[].aliments[].nutriscore` (`"a"` à `"e"`) et `nova` (1 à 4) : produits scannés, d'après Open Food Facts.
 - `mesures` : aussi `tour_de_ventre_cm`, `tour_de_poitrine_cm`, `tour_de_bras_cm`, `tour_de_cuisse_cm`.
 - `tests.notes` : machine et réglages utilisés.
 - `objectifs.poids_cible_kg`.

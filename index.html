@@ -130,6 +130,8 @@
             <label>Durée (min)<input name="duration" inputmode="numeric" autocomplete="off" placeholder="75"></label>
             <label>Pesée avant séance (kg)<input name="weighIn" inputmode="decimal" autocomplete="off" placeholder="106"></label>
           </div>
+          <button type="button" class="primary-button session-open" id="session-open">Mode séance plein écran</button>
+          <p class="hint">Un exercice à la fois, gros boutons, minuteur intégré. Tout ce que tu y notes arrive dans ce formulaire.</p>
           <p class="eyebrow">VÉLO D'ÉCHAUFFEMENT</p>
           <div class="form-grid three">
             <label>Temps (m:ss)<input name="bikeTime" inputmode="text" autocomplete="off" placeholder="8:15"></label>
@@ -155,16 +157,18 @@
 
       <article class="panel rest-panel">
         <div class="rest-row">
-          <span class="rest-title">Minuteur de repos</span>
+          <span class="rest-title">Minuteur</span>
+          <button type="button" class="chip-button" data-rest="20" data-rest-label="Pause RP">0:20</button>
           <button type="button" class="chip-button" data-rest="60">1:00</button>
           <button type="button" class="chip-button" data-rest="90">1:30</button>
           <button type="button" class="chip-button" data-rest="120">2:00</button>
           <button type="button" class="chip-button" data-rest="180">3:00</button>
         </div>
         <div class="rest-row">
-          <label class="toggle-row"><input type="checkbox" id="rest-auto"> Lancer automatiquement après chaque série de</label>
-          <select id="rest-seconds" aria-label="Durée du repos automatique"><option value="60">1:00</option><option value="90">1:30</option><option value="120">2:00</option><option value="180">3:00</option></select>
+          <label class="toggle-row"><input type="checkbox" id="rest-auto"> Lancer tout seul : pause RP après les reps avant l'échec, puis repos de</label>
+          <select id="rest-seconds" aria-label="Durée du repos entre séries"><option value="60">1:00</option><option value="90">1:30</option><option value="120">2:00</option><option value="150">2:30</option><option value="180">3:00</option></select>
         </div>
+        <p class="hint">Chaque exercice a aussi ses boutons « Pause RP » et « Repos ». L'écran reste allumé pendant le décompte ; à la fin, le téléphone vibre et bipe.</p>
       </article>
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">JOURNAL</p><h3>Séances enregistrées</h3></div></div>
@@ -191,6 +195,20 @@
       <p class="muted" id="nutrition-fiber"></p>
       <p class="muted" id="nutrition-alcohol" hidden></p>
       <p class="hint" id="targets-hint" hidden>Définis tes objectifs de calories et de protéines dans <button type="button" class="link-button" data-go="settings">Réglages</button> pour voir ce qu'il te reste.</p>
+
+      <article class="panel remaining-panel" id="remaining-panel" hidden>
+        <p class="eyebrow">IL TE RESTE</p>
+        <p class="remaining-text" id="remaining-text"></p>
+        <div id="remaining-ideas" class="food-suggestions"></div>
+      </article>
+
+      <article class="panel quick-panel">
+        <div class="panel-heading"><div><p class="eyebrow">AJOUT RAPIDE</p><h3>Repas habituels</h3></div>
+          <button type="button" class="link-button" id="templates-manage" hidden>Gérer</button></div>
+        <div id="quick-templates" class="quick-list"></div>
+        <p class="eyebrow quick-sub" id="quick-yesterday-title">COMME HIER</p>
+        <div id="quick-yesterday" class="food-suggestions"></div>
+      </article>
 
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">NOUVELLE ENTRÉE</p><h3 id="meal-form-title">Ajouter un aliment ou un repas</h3></div></div>
@@ -224,6 +242,7 @@
             <label>Photo (facultatif)<input type="file" name="photo" accept="image/*"></label>
           </div>
           <p class="hint" id="per100-hint"></p>
+          <div id="product-badges" class="product-badges" hidden></div>
           <div id="meal-photo-preview" class="photo-preview" hidden><img alt="Aperçu de la photo"><span class="hint">La photo sera réduite (environ 200 Ko) et ses données de localisation supprimées.</span></div>
           <label class="toggle-row" id="meal-photo-keep" hidden><input type="checkbox" name="removePhoto"> Retirer la photo actuelle</label>
           <div class="button-row">
@@ -236,6 +255,12 @@
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">CONSOMMATION</p><h3>Entrées du jour</h3></div></div>
         <div id="meal-history" class="record-list"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">CUISINE</p><h3>Mes recettes</h3></div>
+          <button type="button" class="secondary-button" id="recipe-new">+ Nouvelle recette</button></div>
+        <div id="recipe-list" class="record-list"></div>
       </article>
     </section>
 
@@ -473,13 +498,82 @@
       </article>
     </section>
 
-    <footer><span>PERSONAL PERFORMANCE · VERSION 3</span><span>LOCAL FIRST · AUCUN COMPTE REQUIS</span></footer>
+    <footer><span>PERSONAL PERFORMANCE · VERSION 3.3</span><span>LOCAL FIRST · AUCUN COMPTE REQUIS</span></footer>
   </main>
 
   <div id="rest-pill" class="rest-pill" hidden>
-    <span>Repos</span><b id="rest-pill-time">1:30</b>
+    <span id="rest-pill-label">Repos</span><b id="rest-pill-time">1:30</b>
+    <button type="button" id="rest-more" class="rest-more">+15 s</button>
     <button type="button" id="rest-stop">Arrêter</button>
+    <span class="rest-pill-track"><span id="rest-pill-bar"></span></span>
   </div>
+
+  <dialog id="session-dialog" class="session-dialog fullscreen-dialog" aria-label="Mode séance">
+    <div class="sm-top">
+      <button type="button" class="sm-icon" id="sm-close" aria-label="Quitter le mode séance (rien n'est perdu)">✕</button>
+      <div class="sm-title"><small id="sm-progress"></small><b id="sm-name"></b></div>
+      <div class="sm-nav">
+        <button type="button" class="sm-icon" id="sm-prev" aria-label="Exercice précédent">‹</button>
+        <button type="button" class="sm-icon" id="sm-next" aria-label="Exercice suivant">›</button>
+      </div>
+    </div>
+    <div id="sm-timer" class="sm-timer" hidden>
+      <span id="sm-timer-label">Repos</span><b id="sm-timer-time">1:30</b>
+      <button type="button" id="sm-timer-more">+15 s</button>
+      <button type="button" id="sm-timer-stop">Passer</button>
+      <span class="sm-timer-track"><span id="sm-timer-bar"></span></span>
+    </div>
+    <div class="sm-body">
+      <div id="sm-meta" class="sm-meta exercise-meta"></div>
+      <div id="sm-sets" class="sm-sets"></div>
+      <div id="sm-panel"></div>
+      <div class="sm-extra">
+        <button type="button" class="chip-button" id="sm-add-set">+ Ajouter une série</button>
+        <button type="button" class="chip-button" id="sm-finish">Terminer et revenir au formulaire</button>
+      </div>
+    </div>
+    <div class="sm-bottom" id="sm-actions"></div>
+  </dialog>
+
+  <dialog id="template-dialog" class="dialog form-dialog">
+    <form id="template-form" novalidate>
+      <h3 id="template-dialog-title">Nouveau repas habituel</h3>
+      <div class="form-grid">
+        <label>Nom<input name="name" maxlength="60" autocomplete="off" placeholder="Petit-déj habituel"></label>
+        <label>Moment<select name="kind"></select></label>
+      </div>
+      <div id="template-items" class="template-items"></div>
+      <div class="button-row">
+        <button class="primary-button" type="submit">Enregistrer</button>
+        <button class="secondary-button" type="button" id="template-cancel">Annuler</button>
+        <button class="secondary-button danger-text" type="button" id="template-delete" hidden>Supprimer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="recipe-dialog" class="dialog form-dialog recipe-dialog">
+    <form id="recipe-form" novalidate>
+      <h3 id="recipe-dialog-title">Nouvelle recette</h3>
+      <label class="full-label">Nom de la recette<input name="name" maxlength="120" autocomplete="off" placeholder="Bolognaise maison"></label>
+      <p class="eyebrow">INGRÉDIENTS (POIDS CRU)</p>
+      <div id="recipe-ingredients" class="recipe-ingredients"></div>
+      <label class="full-label">Ajouter un ingrédient<input id="recipe-search" autocomplete="off" placeholder="Tape un nom : boeuf haché, tomate, pâtes…"></label>
+      <div id="recipe-suggestions" class="food-suggestions"></div>
+      <div class="button-row">
+        <button type="button" class="chip-button" id="recipe-scan">Scanner un code-barres</button>
+        <button type="button" class="chip-button" id="recipe-manual">Ingrédient à la main</button>
+      </div>
+      <label class="full-label">Poids total du plat cuit (g, facultatif)<input name="cookedGrams" inputmode="decimal" autocomplete="off" placeholder="1200"></label>
+      <p class="hint">Pèse le plat une fois cuit, sans le récipient (tare la casserole vide avant). Sans ce poids, le calcul se fait sur le poids cru : l'eau perdue ou absorbée à la cuisson fausse alors les valeurs pour 100 g.</p>
+      <div id="recipe-summary" class="recipe-summary"></div>
+      <label class="full-label">Notes (facultatif)<input name="notes" maxlength="500" autocomplete="off" placeholder="4 portions, sauce à part…"></label>
+      <div class="button-row">
+        <button class="primary-button" type="submit">Enregistrer la recette</button>
+        <button class="secondary-button" type="button" id="recipe-cancel">Annuler</button>
+        <button class="secondary-button danger-text" type="button" id="recipe-delete" hidden>Supprimer</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="scan-dialog" class="dialog scan-dialog">
     <h3 tabindex="-1" autofocus>Scanner un code-barres</h3>
@@ -511,8 +605,11 @@
   <script src="db.js"></script>
   <script src="charts.js"></script>
   <script src="training.js"></script>
+  <script src="session.js"></script>
   <script src="nutrition.js"></script>
   <script src="scan.js"></script>
+  <script src="quickmeals.js"></script>
+  <script src="recipes.js"></script>
   <script src="body.js"></script>
   <script src="battery.js"></script>
   <script src="wellbeing.js"></script>

@@ -5,6 +5,7 @@
    ========================================================================== */
 
 let mealPer100 = null;          // valeurs pour 100 g de l'aliment choisi (calcul selon les grammes)
+let mealProduct = null;         // Nutri-Score et NOVA du produit scanné : { nutriscore, nova }
 let mealPhotoFile = null;       // photo choisie, compressée à l'enregistrement
 let photoURLs = [];             // adresses temporaires des miniatures, libérées à chaque affichage
 
@@ -20,8 +21,14 @@ function defaultMealKind() {
 
 async function reloadMeals() {
   const t = today();
-  state.recentMeals = await getByTypeRange("meal", addDays(t, -90), t);
-  state.dayMeals = await getByTypeRange("meal", state.nutritionDate, state.nutritionDate);
+  const byName = (a, b) => a.name.localeCompare(b.name, "fr");
+  [state.recentMeals, state.dayMeals, state.prevDayMeals, state.mealTemplates, state.recipes] = await Promise.all([
+    getByTypeRange("meal", addDays(t, -90), t),
+    getByTypeRange("meal", state.nutritionDate, state.nutritionDate),
+    getByTypeRange("meal", addDays(state.nutritionDate, -1), addDays(state.nutritionDate, -1)),
+    getByType("mealTemplate").then((list) => list.sort(byName)),
+    getByType("recipe").then((list) => list.sort(byName))
+  ]);
 }
 
 /* ---------- Totaux et objectifs ---------- */
@@ -83,7 +90,10 @@ async function setNutritionDate(iso) {
   if (!isValidISO(iso)) return;
   state.nutritionDate = iso > today() ? today() : iso;
   if (!state.editing.meal) mealForm().elements.date.value = state.nutritionDate;
-  state.dayMeals = await getByTypeRange("meal", state.nutritionDate, state.nutritionDate);
+  [state.dayMeals, state.prevDayMeals] = await Promise.all([
+    getByTypeRange("meal", state.nutritionDate, state.nutritionDate),
+    getByTypeRange("meal", addDays(state.nutritionDate, -1), addDays(state.nutritionDate, -1))
+  ]);
   renderNutrition();
 }
 
@@ -102,7 +112,8 @@ function renderMealList() {
   for (const kind of MEAL_KINDS) {
     const group = meals.filter((m) => m.kind === kind);
     if (!group.length) continue;
-    html += `<div class="meal-group"><div class="meal-group-head"><span>${esc(kind)}</span><span>${fmt(sum(group, "kcal"), 0)} kcal</span></div>`;
+    html += `<div class="meal-group"><div class="meal-group-head"><span>${esc(kind)}</span><span class="meal-group-right">${fmt(sum(group, "kcal"), 0)} kcal
+      <button type="button" class="small-button" data-quick="save-template" data-kind="${esc(kind)}" title="Enregistrer ce ${esc(kind.toLowerCase())} comme repas habituel">★ Habituel</button></span></div>`;
     html += group.map((m) => {
       const portion = isAlcoholEntry(m) && m.volumeMl
         ? [`${fmt(m.volumeMl, 0)} ml`, m.abv ? `${fmt(m.abv, 1)} %` : "", m.abv ? `${fmt(standardDrinks(m.volumeMl, m.abv), 1)} verre(s) std` : ""].filter(Boolean).join(" · ")
@@ -110,7 +121,7 @@ function renderMealList() {
       return `<article class="record-item meal-item">
         ${m.photoId ? `<button type="button" class="thumb" data-action="view-photo" data-photo="${esc(m.photoId)}" aria-label="Voir la photo"><img alt="" data-photo-img="${esc(m.photoId)}"></button>` : ""}
         <div class="record-main">
-          <b>${esc(m.name)}</b>
+          <b>${esc(m.name)}</b>${productBadgesHTML(m) ? ` <span class="badges">${productBadgesHTML(m)}</span>` : ""}
           <small>${portion ? `${esc(portion)} · ` : ""}<b>${fmt(m.kcal, 0)} kcal</b> · P ${fmt(m.protein, 1)} g · G ${fmt(m.carbs, 1)} g · L ${fmt(m.fat, 1)} g · Fibres ${fmt(m.fiber, 1)} g</small>
         </div>
         <div class="record-actions">
@@ -196,14 +207,17 @@ function renderFoodSuggestions() {
   const out = document.getElementById("food-suggestions");
   if (fold(raw).length < 2 || !query.length) { out.innerHTML = ""; return; }
   if (!ciqualFoods) loadCiqual();
-  const fromHistory = searchFoodList(historyFoods(), query, 4);
+  const fromRecipes = searchFoodList(state.recipes, query, 3);
+  const recipeNames = new Set(fromRecipes.map((r) => fold(r.name)));
+  const fromHistory = searchFoodList(historyFoods(), query, 4).filter((m) => !recipeNames.has(fold(m.name)));
   const fromBase = searchFoodList(FOODS, query, 3);
-  const taken = new Set([...fromHistory, ...fromBase].map((f) => fold(f.name)));
+  const taken = new Set([...fromRecipes, ...fromHistory, ...fromBase].map((f) => fold(f.name)));
   const fromCiqual = ciqualFoods ? searchFoodList(ciqualFoods, query, 8).filter((f) => !taken.has(fold(f.name))) : [];
-  out.innerHTML = fromHistory.map((m) => `<button type="button" class="food-chip history" data-history="${esc(m.id)}">${esc(m.name)} · ${fmt(m.kcal, 0)} kcal${m.grams ? ` (${fmt(m.grams, 0)} g)` : ""}</button>`).join("")
+  out.innerHTML = fromRecipes.map((r) => `<button type="button" class="food-chip recipe" data-recipe="${esc(r.id)}">Recette · ${esc(r.name)} · ${fmt(recipePer100(r).kcal, 0)} kcal/100 g</button>`).join("")
+    + fromHistory.map((m) => `<button type="button" class="food-chip history" data-history="${esc(m.id)}">${esc(m.name)} · ${fmt(m.kcal, 0)} kcal${m.grams ? ` (${fmt(m.grams, 0)} g)` : ""}</button>`).join("")
     + fromBase.map((f) => `<button type="button" class="food-chip" data-food="${esc(f.name)}">${esc(f.name)} · ${fmt(f.per100.kcal, 0)} kcal/100 g</button>`).join("")
     + fromCiqual.map((f) => `<button type="button" class="food-chip ciqual" data-ciqual="${ciqualFoods.indexOf(f)}" title="${esc(f.group)}">${esc(f.name)} · ${fmt(f.per100.kcal, 0)} kcal/100 g</button>`).join("")
-    + (fromHistory.length + fromBase.length + fromCiqual.length === 0 && ciqualFoods
+    + (fromRecipes.length + fromHistory.length + fromBase.length + fromCiqual.length === 0 && ciqualFoods
       ? `<p class="hint">Rien trouvé : essaie un mot plus court (« poulet », « yaourt »), scanne l'emballage, ou saisis l'étiquette.</p>` : "");
 }
 function fillMacros(values) {
@@ -218,6 +232,27 @@ function applyPer100() {
   const f = grams / 100;
   fillMacros({ kcal: mealPer100.kcal * f, protein: mealPer100.protein * f, carbs: mealPer100.carbs * f, fat: mealPer100.fat * f, fiber: mealPer100.fiber * f });
 }
+/* ---------- Nutri-Score et NOVA (produits scannés, d'après Open Food Facts) ---------- */
+
+const NOVA_LABELS = { 1: "brut ou peu transformé", 2: "ingrédient culinaire", 3: "transformé", 4: "ultra-transformé" };
+function productScoresText(p) {
+  if (!p) return "";
+  return [p.nutriscore ? `Nutri-Score ${p.nutriscore.toUpperCase()}` : "", p.nova ? `NOVA ${p.nova} (${NOVA_LABELS[p.nova]})` : ""].filter(Boolean).join(" · ");
+}
+function productBadgesHTML(p) {
+  if (!p) return "";
+  const ns = /^[a-e]$/.test(p.nutriscore || "") ? p.nutriscore : null;
+  const nova = [1, 2, 3, 4].includes(p.nova) ? p.nova : null;
+  return (ns ? `<span class="badge ns ns-${ns}" title="Nutri-Score ${ns.toUpperCase()}">Nutri-Score ${ns.toUpperCase()}</span>` : "")
+    + (nova ? `<span class="badge nova nova-${nova}" title="NOVA ${nova} : ${NOVA_LABELS[nova]}">NOVA ${nova}</span>` : "");
+}
+function setMealProduct(p) {
+  mealProduct = p && (p.nutriscore || p.nova) ? { nutriscore: p.nutriscore || null, nova: p.nova || null } : null;
+  const el = document.getElementById("product-badges");
+  el.hidden = !mealProduct;
+  el.innerHTML = mealProduct ? `${productBadgesHTML(mealProduct)}<span class="hint">${esc(productScoresText(mealProduct))}</span>` : "";
+}
+
 function updatePer100Hint() {
   document.getElementById("per100-hint").textContent = mealPer100
     ? `Calcul automatique : ${fmt(mealPer100.kcal, 0)} kcal pour 100 g. Modifie les grammes, les valeurs suivent.`
@@ -226,6 +261,7 @@ function updatePer100Hint() {
 function chooseFood(food) {
   const form = mealForm();
   form.elements.name.value = food.name;
+  setMealProduct(null);
   mealPer100 = { ...food.per100 };
   if (!parseNumber(form.elements.grams.value)) form.elements.grams.value = "100";
   applyPer100();
@@ -235,6 +271,7 @@ function chooseFood(food) {
 function chooseHistoryMeal(m) {
   const form = mealForm();
   form.elements.name.value = m.name;
+  setMealProduct(m);
   form.elements.quantity.value = m.quantity || "";
   setField(form, "grams", m.grams);
   mealPer100 = m.per100 ? { ...m.per100 } : null;
@@ -273,6 +310,7 @@ function chooseAlcoholPreset(p) {
   form.elements.grams.value = "";
   form.elements.quantity.value = p.volumeMl >= 500 ? "1 pinte" : "1 verre";
   mealPer100 = null;
+  setMealProduct(null);
   fillMacros({ kcal: p.kcal, protein: 0, carbs: null, fat: 0, fiber: 0 });
   updatePer100Hint();
   toggleAlcoholFields();
@@ -312,6 +350,7 @@ function resetMealForm() {
   form.elements.date.value = state.nutritionDate;
   form.elements.kind.value = defaultMealKind();
   mealPer100 = null;
+  setMealProduct(null);
   mealPhotoFile = null;
   document.getElementById("meal-photo-preview").hidden = true;
   document.getElementById("meal-photo-keep").hidden = true;
@@ -341,6 +380,7 @@ function startEditMeal(id) {
   setField(form, "abv", m.abv);
   toggleAlcoholFields();
   mealPer100 = m.per100 ? { ...m.per100 } : null;
+  setMealProduct(m);
   mealPhotoFile = null;
   document.getElementById("meal-photo-keep").hidden = !m.photoId;
   form.elements.removePhoto.checked = false;
@@ -370,6 +410,7 @@ async function onMealSubmit(event) {
       per100: mealPer100, photoId: existing ? existing.photoId || null : null,
       createdAt: existing ? existing.createdAt : undefined
     };
+    if (mealProduct) assignDefined(record, { nutriscore: mealProduct.nutriscore, nova: mealProduct.nova });
     if (record.kind === "Alcool") {
       assignDefined(record, {
         volumeMl: readNumber(form, "volumeMl", { min: 0, max: 5000, decimals: 0, label: "Volume (ml)" }),
@@ -409,7 +450,10 @@ async function repeatMeal(id) {
 function renderNutrition() {
   safeRender("navigation par jour", renderDayNav);
   safeRender("totaux nutrition", renderNutritionTotals);
+  safeRender("il te reste", renderRemaining);
+  safeRender("ajout rapide", renderQuickAdd);
   safeRender("liste des repas", renderMealList);
+  safeRender("recettes", renderRecipeList);
 }
 
 function setupNutrition() {
@@ -436,6 +480,7 @@ function setupNutrition() {
     if (b.dataset.food) { const f = FOODS.find((x) => x.name === b.dataset.food); if (f) chooseFood(f); }
     if (b.dataset.ciqual && ciqualFoods) { const f = ciqualFoods[Number(b.dataset.ciqual)]; if (f) chooseFood(f); }
     if (b.dataset.history) { const m = state.recentMeals.find((x) => x.id === b.dataset.history); if (m) chooseHistoryMeal(m); }
+    if (b.dataset.recipe) { const r = state.recipes.find((x) => x.id === b.dataset.recipe); if (r) useRecipe(r); }
   });
   form.elements.photo.addEventListener("change", (e) => {
     mealPhotoFile = e.target.files[0] || null;

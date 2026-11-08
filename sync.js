@@ -15,7 +15,7 @@ const SYNC_BATCH = 400;       // écritures par envoi (Firestore : 500 au maximu
 const SYNC_DEBOUNCE_MS = 2500;
 const SYNC_OVERLAP_MS = 120000;   // marge de relecture à chaque réception
 
-let syncAccount = null;       // { apiKey, projectId, email, uid, refreshToken, lastPull, lastSyncAt, initialized }
+let syncAccount = null;       // { apiKey, projectId, email, uid, refreshToken, lastPull, lastSyncAt, initialized, typesVersion }
 let syncIdToken = null;
 let syncIdTokenExp = 0;
 let syncRunning = null;
@@ -42,10 +42,18 @@ function parseFirebaseConfig(text) {
   return { apiKey, projectId };
 }
 
+/* Version des types d'entrées connus (3.2 : repas habituels et recettes). Une version plus ancienne
+   de l'app a pu ignorer ces fiches en les recevant : on relit alors tout Firebase une fois. */
+const SYNC_TYPES_VERSION = 2;
 async function loadSyncAccount() {
   syncAccount = await getSetting("syncAccount", null);
   syncTracking = Boolean(syncAccount && syncAccount.refreshToken);
   syncStatus.state = syncTracking ? "idle" : "off";
+  if (syncTracking && (syncAccount.typesVersion || 1) < SYNC_TYPES_VERSION) {
+    syncAccount.lastPull = null;
+    syncAccount.typesVersion = SYNC_TYPES_VERSION;
+    await saveSyncAccount();
+  }
 }
 async function saveSyncAccount() { await setSetting("syncAccount", syncAccount); }
 
@@ -319,7 +327,7 @@ async function connectSync(configText, email, password) {
   syncAccount = {
     apiKey: config.apiKey, projectId: config.projectId, email, uid: body.localId, refreshToken: body.refreshToken,
     lastPull: sameAccount ? syncAccount.lastPull : null, lastSyncAt: sameAccount ? syncAccount.lastSyncAt : null,
-    initialized: sameAccount ? Boolean(syncAccount.initialized) : false
+    initialized: sameAccount ? Boolean(syncAccount.initialized) : false, typesVersion: SYNC_TYPES_VERSION
   };
   syncIdToken = body.idToken;
   syncIdTokenExp = Date.now() + (Number(body.expiresIn) || 3600) * 1000;

@@ -65,7 +65,8 @@ function dayToJSON(day) {
     nom: kind,
     aliments: food.filter((m) => m.kind === kind).map((m) => ({
       nom: m.name, quantite_g: num(m.grams, 0), portion: m.quantity, kcal: num(m.kcal, 0),
-      proteines_g: num(m.protein), glucides_g: num(m.carbs), lipides_g: num(m.fat), fibres_g: num(m.fiber)
+      proteines_g: num(m.protein), glucides_g: num(m.carbs), lipides_g: num(m.fat), fibres_g: num(m.fiber),
+      nutriscore: m.nutriscore || undefined, nova: m.nova || undefined
     }))
   }));
   const cardio = [];
@@ -95,6 +96,7 @@ function dayToJSON(day) {
       type: wo.sessionType, duree_min: num(wo.duration, 0),
       exercices: (wo.exercises || []).map((e) => ({
         nom: e.name,
+        poids_du_corps: e.bodyweight ? true : undefined,
         series: validSets(e.sets).map((s) => ({ charge_kg: num(s.load, 2), reps: num(s.reps, 0), reps_rest_pause: num(s.rpReps, 0), pause_s: s.rpReps ? num(s.rpPause, 0) : undefined }))
       })),
       notes: wo.notes
@@ -157,7 +159,7 @@ function dayToText(day) {
     (wo.exercises || []).forEach((e) => {
       const sets = validSets(e.sets);
       const rp = sets.find((s) => s.rpReps);
-      L.push(`- ${e.name} : ${sets.map(fmtSet).join(", ").replace(/ /g, " ")}${rp ? ` (rest-pause${rp.rpPause ? `, pause ${fmt(rp.rpPause, 0)} s` : ""})` : ""}`);
+      L.push(`- ${e.name} : ${sets.map((s) => fmtSet(s, e.bodyweight)).join(", ").replace(/ /g, " ")}${rp ? ` (rest-pause${rp.rpPause ? `, pause ${fmt(rp.rpPause, 0)} s` : ""})` : ""}`);
     });
     if (wo.notes) L.push(`- Notes : ${wo.notes}`);
   });

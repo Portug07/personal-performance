@@ -235,7 +235,7 @@ textarea { resize: vertical; }
 .set-field span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 12px; pointer-events: none; }
 .set-x { color: var(--faint); text-align: center; }
 .set-prev { color: var(--faint); font-size: 12px; white-space: nowrap; }
-.exercise-actions { display: flex; gap: 8px; margin-top: 8px; }
+.exercise-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
 .record-item { border: 1px solid var(--line); border-radius: 12px; padding: 13px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .record-main { min-width: 0; flex: 1; }
@@ -319,6 +319,12 @@ textarea { resize: vertical; }
 }
 .rest-pill b { font-size: 22px; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 56px; }
 .rest-pill button { border: 0; background: var(--accent); color: #151a12; font-weight: 800; border-radius: 30px; padding: 8px 14px; min-height: 40px; }
+.rest-pill button.rest-more { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.rest-pill { overflow: hidden; }
+.rest-pill-track { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #0006; }
+.rest-pill-track span { display: block; height: 100%; width: 100%; background: var(--accent); transition: width 0.25s linear; }
+.exercise-actions-sep { flex: 1 1 auto; }
+.timer-chip { border-color: var(--accent-dark); }
 .dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 16px; max-width: min(92vw, 720px); }
 .dialog::backdrop { background: #000b; }
 .dialog img { display: block; max-width: 100%; max-height: 70vh; border-radius: 10px; margin-bottom: 12px; }
@@ -392,3 +398,125 @@ footer { display: flex; justify-content: space-between; color: #657061; font-siz
 .scan-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .scan-frame { position: absolute; left: 8%; right: 8%; top: 28%; bottom: 28%; border: 2px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 999px #0007; pointer-events: none; }
 .scan-manual { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin: 8px 0 12px; }
+
+/* ---------- Mode séance plein écran ---------- */
+.session-open { width: 100%; margin: 4px 0 2px; min-height: 52px; font-size: 17px; }
+.session-dialog {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0;
+  border: 0; background: var(--bg); color: var(--text);
+}
+.session-dialog[open] { display: flex; flex-direction: column; }
+.session-dialog::backdrop { background: var(--bg); }
+.sm-top { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.sm-title { flex: 1; min-width: 0; display: grid; }
+.sm-title small { color: var(--muted); font-size: 13px; }
+.sm-title b { font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+.sm-nav { display: flex; gap: 6px; }
+.sm-icon { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 22px; font-weight: 700; }
+.sm-icon:disabled { opacity: 0.35; }
+.sm-timer { position: relative; overflow: hidden; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #1e271a; border-bottom: 1px solid var(--accent-dark); }
+.sm-timer[hidden] { display: none; }
+.sm-timer span:first-child { font-weight: 700; color: var(--muted); }
+.sm-timer b { flex: 1; font-size: 40px; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1; }
+.sm-timer button { border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 800; border-radius: 30px; padding: 8px 14px; min-height: 44px; }
+.sm-timer button:last-of-type { background: var(--accent); color: #151a12; }
+.sm-timer-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #0006; }
+.sm-timer-track span { display: block; height: 100%; background: var(--accent); transition: width 0.25s linear; }
+.sm-body { flex: 1; overflow-y: auto; padding: 12px 14px 16px; }
+.sm-meta { font-size: 14px; line-height: 1.5; margin-bottom: 10px; }
+.sm-meta .advice { margin-top: 6px; }
+.sm-sets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sm-set { display: flex; align-items: center; gap: 6px; text-align: left; padding: 8px 10px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 14px; }
+.sm-set.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.sm-set.is-done .sm-set-text { color: var(--muted); }
+.sm-set-num { font-weight: 800; color: var(--accent); min-width: 26px; }
+.sm-set-text { font-variant-numeric: tabular-nums; }
+.sm-set-check { color: var(--accent); font-weight: 800; }
+.sm-current { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--panel); }
+.sm-current .eyebrow { margin: 0 0 8px; }
+.sm-field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; margin-bottom: 8px; }
+.sm-field-label { grid-column: 1 / -1; font-weight: 700; color: var(--muted); font-size: 14px; }
+.sm-stepper { display: grid; grid-template-columns: 58px 1fr 58px; gap: 8px; }
+.sm-unit { color: var(--muted); min-width: 34px; }
+.sm-step { height: 56px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 30px; font-weight: 700; }
+.sm-step:active { background: var(--accent-soft); }
+.sm-input { height: 56px; text-align: center; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sm-input::placeholder { color: var(--faint); }
+.sm-input:disabled { opacity: 0.4; }
+.sm-main { flex: 2; min-height: 60px; font-size: 18px; }
+.sm-alt { flex: 1; min-height: 60px; font-size: 14px; }
+.sm-bottom { display: flex; gap: 10px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); }
+.sm-bottom:empty { display: none; }
+.sm-extra { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.sm-prev { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.sm-done { font-size: 18px; font-weight: 800; color: var(--accent); margin: 4px 0 12px; }
+
+.toast.has-action { pointer-events: auto; }
+.toast-action { margin-left: 10px; border: 0; border-radius: 8px; padding: 6px 12px; background: #141a11; color: var(--accent); font-weight: 800; }
+
+/* ---------- Ajout rapide, repas habituels, recettes ---------- */
+.quick-list { display: grid; gap: 8px; }
+.quick-item { display: flex; gap: 8px; align-items: stretch; }
+.quick-chip { flex: 1; display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--accent-dark); background: var(--accent-soft); color: var(--text); }
+.quick-chip b { font-size: 16px; }
+.quick-chip small { color: var(--muted); }
+.quick-sub { margin: 14px 0 6px; }
+.meal-group-right { display: inline-flex; align-items: center; gap: 8px; }
+.meal-group-head .small-button { padding: 4px 8px; min-height: 30px; font-size: 12px; }
+.food-chip.recipe { border-color: var(--accent); font-weight: 700; }
+.form-dialog { width: min(96vw, 640px); }
+.form-dialog h3 { margin: 0 0 12px; }
+.template-items { display: grid; gap: 6px; margin: 12px 0; }
+.template-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.template-item span { display: grid; }
+.template-item small { color: var(--muted); }
+.recipe-dialog { max-height: 92dvh; }
+.recipe-ingredients { display: grid; gap: 8px; margin-bottom: 10px; }
+.ing-row { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel2); }
+.ing-main { display: grid; grid-template-columns: 1fr 96px auto auto; gap: 8px; align-items: center; }
+.ing-name { min-width: 0; }
+.ing-name-text { font-weight: 700; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.ing-grams { display: flex; align-items: center; gap: 4px; }
+.ing-grams span, .ing-kcal { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.ing-per100 summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.ing-per100-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 6px; }
+.ing-per100-grid label { font-size: 12px; }
+.recipe-summary { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); }
+.recipe-summary:empty { display: none; }
+.recipe-per100 { font-size: 16px; }
+@media (max-width: 520px) {
+  .ing-main { grid-template-columns: 1fr 84px auto; }
+  .ing-main .ing-kcal { grid-column: 1; grid-row: 2; }
+  .ing-per100-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ---------- Poids du corps ---------- */
+.exercise-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 2px; }
+.bw-toggle { padding: 6px 12px; font-size: 13px; }
+.bw-toggle[aria-pressed="true"] { background: var(--accent); color: #151a12; border-color: var(--accent); font-weight: 800; }
+.bw-hint { display: none; margin: 0; font-size: 12px; }
+.exercise-block.is-bw .bw-hint { display: block; flex: 1 1 200px; }
+.set-load .unit-bw { display: none; }
+.exercise-block.is-bw .set-load .unit-kg { display: none; }
+.exercise-block.is-bw .set-load .unit-bw { display: inline; }
+
+/* ---------- Nutri-Score / NOVA ---------- */
+.badges { display: inline-flex; gap: 4px; vertical-align: middle; }
+.badge { display: inline-block; font-size: 11px; font-weight: 800; line-height: 1; padding: 4px 6px; border-radius: 6px; white-space: nowrap; }
+.badge.ns-a { background: #1e8f4e; color: #fff; }
+.badge.ns-b { background: #7ac142; color: #10210a; }
+.badge.ns-c { background: #f5c518; color: #2a2100; }
+.badge.ns-d { background: #ef8a1e; color: #2a1400; }
+.badge.ns-e { background: #e04a2b; color: #fff; }
+.badge.nova { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.badge.nova-4 { border-color: #e04a2b; color: #f08f7a; }
+.badge.nova-3 { border-color: #ef8a1e; color: #f2b06b; }
+.product-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 12px; }
+.product-badges .hint { margin: 0; }
+
+/* ---------- Il te reste ---------- */
+.remaining-panel { padding: 14px 18px; }
+.remaining-panel .eyebrow { margin: 0 0 6px; }
+.remaining-text { margin: 0 0 6px; font-size: 16px; }
+.remaining-hint { width: 100%; margin: 4px 0 2px; }
+.remaining-chip { border-color: var(--accent-dark); }

@@ -137,12 +137,12 @@ function buildClaudeSummary(days = reviewDays) {
   L.push("", `## Entraînement (${p.workouts.length} séance${p.workouts.length > 1 ? "s" : ""})`);
   p.workouts.forEach((w) => {
     L.push(`- ${fmtWeekday(w.date)} · ${w.sessionType}${w.duration ? ` (${fmt(w.duration, 0)} min)` : ""}${w.cardio ? ` · cardio : ${w.cardio}` : ""}`);
-    (w.exercises || []).forEach((e) => L.push(`  - ${e.name} : ${validSets(e.sets).map(fmtSet).join(", ")}`));
+    (w.exercises || []).forEach((e) => L.push(`  - ${e.name} : ${validSets(e.sets).map((s) => fmtSet(s, e.bodyweight)).join(", ")}`));
     if (w.notes) L.push(`  - Notes : ${w.notes}`);
   });
   const flags = computeRecordFlags();
   const records = p.workouts.flatMap((w) => {
-    return (w.exercises || []).filter((e) => flags.has(`${w.id}|${fold(e.name)}`)).map((e) => `${e.name} ${fmtSet(bestSet(e.sets))}`);
+    return (w.exercises || []).filter((e) => flags.has(`${w.id}|${fold(e.name)}`)).map((e) => `${e.name} ${fmtSet(bestSet(e.sets), e.bodyweight)}`);
   });
   if (records.length) L.push(`- Records battus : ${records.join(", ")}`);
   L.push("", `## Récupération (${p.well.length} check-in${p.well.length > 1 ? "s" : ""})`);

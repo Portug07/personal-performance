@@ -3,7 +3,7 @@
    Données de départ (programme, aliments) et contrôle des données importées.
    ========================================================================== */
 
-const APP_VERSION = "3.1.0";
+const APP_VERSION = "3.3.0";
 const EXPORT_FORMAT = 3;
 const PROGRAM_SCHEMA = 3;
 /* Réglages synchronisés entre appareils (en plus des entrées). */
@@ -114,6 +114,9 @@ const state = {
   recentMeals: [],           // repas des 90 derniers jours (suggestions, bilans)
   nutritionDate: null,
   dayMeals: [],              // repas du jour affiché dans « Nutrition »
+  prevDayMeals: [],          // repas de la veille du jour affiché (« Comme hier »)
+  mealTemplates: [],         // repas habituels
+  recipes: [],               // recettes maison
   editing: { workout: null, meal: null, measurement: null, wellbeing: null, battery: null },
   pages: { workouts: 1, measurements: 1, wellbeing: 1 },
   weightRange: 90,
@@ -145,7 +148,7 @@ const FOODS = [
    ========================================================================== */
 
 const LIMITS = {
-  kcal: [0, 20000], grams: [0, 5000], macro: [0, 2000], weight: [20, 400], cm: [5, 300],
+  kcal: [0, 20000], grams: [0, 5000], recipeGrams: [1, 50000], macro: [0, 2000], weight: [20, 400], cm: [5, 300],
   load: [0, 1000], reps: [0, 1000], duration: [0, 1440], sleep: [0, 24], water: [0, 20],
   scale1: [1, 10], scale0: [0, 10], scale5: [1, 5], alcohol: [0, 100],
   volumeMl: [0, 5000], abv: [0, 96], pause: [0, 600], seconds: [0, 86400], km: [0, 300], level: [0, 100],
@@ -209,7 +212,7 @@ function normalizeRecord(raw) {
   switch (raw.type) {
     case "workout": {
       const exercises = (Array.isArray(raw.exercises) ? raw.exercises : []).slice(0, 40)
-        .map((e) => ({ exerciseId: cleanText(e && e.exerciseId, 80) || null, name: cleanText(e && e.name, 80), sets: cleanSets(e && e.sets) }))
+        .map((e) => ({ exerciseId: cleanText(e && e.exerciseId, 80) || null, name: cleanText(e && e.name, 80), sets: cleanSets(e && e.sets), ...(e && e.bodyweight === true ? { bodyweight: true } : {}) }))
         .filter((e) => e.name);
       return {
         record: assignDefined({
@@ -222,14 +225,7 @@ function normalizeRecord(raw) {
       };
     }
     case "meal": {
-      const record = {
-        ...base, kind: MEAL_KINDS.includes(raw.kind) ? raw.kind : "Autre", name: cleanText(raw.name, 120) || "Sans nom",
-        quantity: cleanText(raw.quantity, 60), grams: cleanNum(raw.grams, LIMITS.grams, 1),
-        kcal: cleanNum(raw.kcal, LIMITS.kcal, 0) || 0, protein: cleanNum(raw.protein, LIMITS.macro, 1) || 0,
-        carbs: cleanNum(raw.carbs, LIMITS.macro, 1) || 0, fat: cleanNum(raw.fat, LIMITS.macro, 1) || 0,
-        fiber: cleanNum(raw.fiber, LIMITS.macro, 1) || 0, per100: cleanPer100(raw.per100), photoId: cleanId(raw.photoId)
-      };
-      assignDefined(record, { volumeMl: cleanNum(raw.volumeMl, LIMITS.volumeMl, 0), abv: cleanNum(raw.abv, LIMITS.abv, 1) });
+      const record = { ...base, ...cleanMealFields(raw), photoId: cleanId(raw.photoId) };
       /* Sauvegarde de la version 1 : la photo était stockée dans l'entrée elle-même. */
       if (typeof raw.photo === "string" && /^data:image\/(jpeg|png|webp|gif);base64,/.test(raw.photo)) {
         try {
@@ -272,9 +268,43 @@ function normalizeRecord(raw) {
       });
       return BATTERY_KEYS.some((k) => record[k] !== undefined) ? { record, photo } : null;
     }
+    case "mealTemplate": {
+      /* Repas habituel : plusieurs aliments ajoutés d'un coup (version 3.2). */
+      const items = (Array.isArray(raw.items) ? raw.items : []).slice(0, 30)
+        .filter((i) => i && typeof i === "object" && cleanText(i.name, 120)).map(cleanMealFields);
+      if (!items.length) return null;
+      return { record: { ...base, name: cleanText(raw.name, 60) || "Repas habituel", kind: MEAL_KINDS.includes(raw.kind) ? raw.kind : "Autre", items }, photo };
+    }
+    case "recipe": {
+      /* Recette maison : ingrédients pesés crus, poids total cuit facultatif (version 3.2). */
+      const ingredients = (Array.isArray(raw.ingredients) ? raw.ingredients : []).slice(0, 60)
+        .map((i) => ({ name: cleanText(i && i.name, 120), grams: cleanNum(i && i.grams, LIMITS.grams, 1), per100: cleanPer100(i && i.per100) }))
+        .filter((i) => i.name && i.grams && i.per100);
+      if (!ingredients.length) return null;
+      return {
+        record: assignDefined({ ...base, name: cleanText(raw.name, 120) || "Recette", ingredients }, {
+          cookedGrams: cleanNum(raw.cookedGrams, LIMITS.recipeGrams, 0), notes: cleanText(raw.notes, 500)
+        }), photo
+      };
+    }
     default:
       return null;
   }
+}
+/* Champs d'un repas (entrée du journal ou aliment d'un repas habituel). */
+function cleanMealFields(raw) {
+  const out = {
+    kind: MEAL_KINDS.includes(raw.kind) ? raw.kind : "Autre", name: cleanText(raw.name, 120) || "Sans nom",
+    quantity: cleanText(raw.quantity, 60), grams: cleanNum(raw.grams, LIMITS.grams, 1),
+    kcal: cleanNum(raw.kcal, LIMITS.kcal, 0) || 0, protein: cleanNum(raw.protein, LIMITS.macro, 1) || 0,
+    carbs: cleanNum(raw.carbs, LIMITS.macro, 1) || 0, fat: cleanNum(raw.fat, LIMITS.macro, 1) || 0,
+    fiber: cleanNum(raw.fiber, LIMITS.macro, 1) || 0, per100: cleanPer100(raw.per100)
+  };
+  const grade = String(raw.nutriscore || "").toLowerCase();
+  return assignDefined(out, {
+    volumeMl: cleanNum(raw.volumeMl, LIMITS.volumeMl, 0), abv: cleanNum(raw.abv, LIMITS.abv, 1),
+    nutriscore: /^[a-e]$/.test(grade) ? grade : null, nova: cleanNum(raw.nova, [1, 4], 0)
+  });
 }
 
 function normalizeProgram(raw) {
