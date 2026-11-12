@@ -63,7 +63,8 @@ function alcoholTotals(meals) {
 }
 function renderNutritionTotals() {
   const t = mealTotals(state.dayMeals);
-  const g = state.targets;
+  const g = targetsFor(state.nutritionDate);
+  document.getElementById("nutrition-daytype").innerHTML = dayTypeBarHTML(state.nutritionDate);
   const el = document.getElementById("nutrition-totals");
   el.innerHTML = targetCard("Calories", t.kcal, g.kcal, "kcal") + targetCard("Protéines", t.protein, g.protein, "g")
     + targetCard("Glucides", t.carbs, g.carbs, "g") + targetCard("Lipides", t.fat, g.fat, "g");
@@ -112,7 +113,10 @@ function renderMealList() {
   for (const kind of MEAL_KINDS) {
     const group = meals.filter((m) => m.kind === kind);
     if (!group.length) continue;
-    html += `<div class="meal-group"><div class="meal-group-head"><span>${esc(kind)}</span><span class="meal-group-right">${fmt(sum(group, "kcal"), 0)} kcal
+    const combo = comboSuggestion(kind, group);
+    html += `<div class="meal-group">${combo ? `<div class="combo-hint">Tu as déjà mangé exactement ce ${esc(kind.toLowerCase())} ${fmt(combo.times, 0)} fois. En faire un repas habituel ?
+      <span class="combo-actions"><button type="button" class="small-button" data-quick="save-template" data-kind="${esc(kind)}">Oui</button>
+      <button type="button" class="small-button" data-quick="combo-dismiss" data-sig="${esc(combo.sig)}">Non merci</button></span></div>` : ""}<div class="meal-group-head"><span>${esc(kind)}</span><span class="meal-group-right">${fmt(sum(group, "kcal"), 0)} kcal
       <button type="button" class="small-button" data-quick="save-template" data-kind="${esc(kind)}" title="Enregistrer ce ${esc(kind.toLowerCase())} comme repas habituel">★ Habituel</button></span></div>`;
     html += group.map((m) => {
       const portion = isAlcoholEntry(m) && m.volumeMl
@@ -195,16 +199,35 @@ function searchFoodList(list, query, max, wordsOf = (f) => f.words || foodWords(
 }
 function historyFoods() {
   const seen = new Map();
-  state.recentMeals.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach((m) => {
+  state.recentMeals.slice().sort(newestFirst).forEach((m) => {
     const k = fold(m.name);
     if (!seen.has(k)) seen.set(k, m);
   });
   return [...seen.values()];
 }
+/* Tes aliments les plus notés (60 derniers jours), avec ta dernière portion : un appui suffit. */
+function frequentFoods(max = 8) {
+  const from = addDays(today(), -60);
+  const count = new Map(), last = new Map();
+  state.recentMeals.slice().sort(newestFirst).forEach((m) => {
+    if (m.date < from || isAlcoholEntry(m) || !(m.kcal > 0)) return;
+    const k = fold(m.name);
+    count.set(k, (count.get(k) || 0) + 1);
+    if (!last.has(k)) last.set(k, m);
+  });
+  return [...count.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, max).map(([k]) => last.get(k));
+}
+function frequentFoodsHTML() {
+  if (state.editing.meal) return "";
+  const list = frequentFoods();
+  if (!list.length) return "";
+  return `<span class="food-chips-label">Fréquents :</span>` + list.map((m) => `<button type="button" class="food-chip history frequent" data-history="${esc(m.id)}">${esc(m.name)}${m.grams ? ` · ${fmt(m.grams, 0)} g` : (m.quantity ? ` · ${esc(m.quantity)}` : "")} · ${fmt(m.kcal, 0)} kcal</button>`).join("");
+}
 function renderFoodSuggestions() {
   const raw = mealForm().elements.name.value;
   const query = foodWords(raw);
   const out = document.getElementById("food-suggestions");
+  if (!fold(raw)) { out.innerHTML = frequentFoodsHTML(); return; }
   if (fold(raw).length < 2 || !query.length) { out.innerHTML = ""; return; }
   if (!ciqualFoods) loadCiqual();
   const fromRecipes = searchFoodList(state.recipes, query, 3);
@@ -247,10 +270,73 @@ function productBadgesHTML(p) {
     + (nova ? `<span class="badge nova nova-${nova}" title="NOVA ${nova} : ${NOVA_LABELS[nova]}">NOVA ${nova}</span>` : "");
 }
 function setMealProduct(p) {
-  mealProduct = p && (p.nutriscore || p.nova) ? { nutriscore: p.nutriscore || null, nova: p.nova || null } : null;
+  const barcode = p && /^\d{8,14}$/.test(String(p.barcode || p.code || "")) ? String(p.barcode || p.code) : null;
+  mealProduct = p && (p.nutriscore || p.nova || barcode) ? { nutriscore: p.nutriscore || null, nova: p.nova || null, barcode } : null;
   const el = document.getElementById("product-badges");
-  el.hidden = !mealProduct;
-  el.innerHTML = mealProduct ? `${productBadgesHTML(mealProduct)}<span class="hint">${esc(productScoresText(mealProduct))}</span>` : "";
+  const scores = mealProduct && (mealProduct.nutriscore || mealProduct.nova);
+  el.hidden = !scores;
+  el.innerHTML = scores ? `${productBadgesHTML(mealProduct)}<span class="hint">${esc(productScoresText(mealProduct))}</span>` : "";
+}
+
+/* ---------- Portions sans balance et cru / cuit ---------- */
+
+let mealCook = null;            // { info: { factor, base }, weighed: "raw" | "cooked", basePer100 }
+function resetPortionTools() {
+  mealCook = null;
+  document.getElementById("cook-row").hidden = true;
+  document.getElementById("portion-count").value = "1";
+  document.getElementById("portion-unit").value = "";
+  document.getElementById("portion-result").textContent = "";
+}
+/* Après le choix d'un aliment : propose « pesé cru / pesé cuit » quand la conversion est connue. */
+function refreshCookRow() {
+  const name = mealForm().elements.name.value;
+  const info = mealPer100 ? cookInfo(name) : null;
+  const row = document.getElementById("cook-row");
+  if (!info) { mealCook = null; row.hidden = true; return; }
+  if (!mealCook || mealCook.name !== name) mealCook = { name, info, weighed: info.base, basePer100: { ...mealPer100 } };
+  row.hidden = false;
+  $$("[data-cook]", row).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cook === mealCook.weighed)));
+  const g = parseNumber(mealForm().elements.grams.value);
+  const other = info.base === "raw" ? "cuit" : "cru";
+  const hint = document.getElementById("cook-hint");
+  if (mealCook.weighed === info.base) {
+    hint.textContent = `L'aliment choisi est ${info.base === "raw" ? "cru" : "cuit"}. Tu as pesé ${other} ? Appuie sur « ${other} ».`;
+  } else if (g > 0) {
+    const equiv = info.base === "raw" ? g / info.factor : g * info.factor;
+    hint.textContent = `${fmt(g, 0)} g ${mealCook.weighed === "cooked" ? "cuits" : "crus"} ≈ ${fmt(equiv, 0)} g ${info.base === "raw" ? "crus" : "cuits"} (× ${fmt(info.factor, 1)} environ).`;
+  } else {
+    hint.textContent = "Indique le poids pesé : les valeurs sont converties.";
+  }
+}
+function setWeighed(weighed) {
+  if (!mealCook) return;
+  mealCook.weighed = weighed;
+  mealPer100 = per100ForWeighed(mealCook.basePer100, mealCook.info, weighed);
+  const q = mealForm().elements.quantity;
+  q.value = q.value.replace(/\s*·?\s*pesée? (cuit|cru)$/i, "");
+  if (weighed !== mealCook.info.base) q.value = `${q.value ? `${q.value} · ` : ""}pesé ${weighed === "cooked" ? "cuit" : "cru"}`;
+  applyPer100();
+  updatePer100Hint();
+  refreshCookRow();
+}
+function onPortionChange() {
+  const unit = document.getElementById("portion-unit").value;
+  const count = parseNumber(document.getElementById("portion-count").value);
+  const out = document.getElementById("portion-result");
+  if (!unit || !(count > 0)) { out.textContent = ""; return; }
+  const name = mealForm().elements.name.value;
+  const g = portionGrams(name, unit);
+  if (!g) {
+    out.textContent = name ? "Poids inconnu pour cet aliment : pèse-le une fois (ou indique les grammes), l'app le retiendra." : "Choisis d'abord l'aliment.";
+    return;
+  }
+  const grams = round(g * count, 0);
+  setField(mealForm(), "grams", grams);
+  mealForm().elements.quantity.value = portionLabel(count, unit);
+  out.textContent = `= ${fmt(grams, 0)} g (moyenne)`;
+  applyPer100();
+  refreshCookRow();
 }
 
 function updatePer100Hint() {
@@ -263,9 +349,11 @@ function chooseFood(food) {
   form.elements.name.value = food.name;
   setMealProduct(null);
   mealPer100 = { ...food.per100 };
+  mealCook = null;
   if (!parseNumber(form.elements.grams.value)) form.elements.grams.value = "100";
   applyPer100();
   updatePer100Hint();
+  refreshCookRow();
   document.getElementById("food-suggestions").innerHTML = "";
 }
 function chooseHistoryMeal(m) {
@@ -275,8 +363,10 @@ function chooseHistoryMeal(m) {
   form.elements.quantity.value = m.quantity || "";
   setField(form, "grams", m.grams);
   mealPer100 = m.per100 ? { ...m.per100 } : null;
+  mealCook = null;
   fillMacros(m);
   updatePer100Hint();
+  document.getElementById("cook-row").hidden = true;
   document.getElementById("food-suggestions").innerHTML = "";
 }
 
@@ -354,10 +444,11 @@ function resetMealForm() {
   mealPhotoFile = null;
   document.getElementById("meal-photo-preview").hidden = true;
   document.getElementById("meal-photo-keep").hidden = true;
-  document.getElementById("food-suggestions").innerHTML = "";
+  resetPortionTools();
   updatePer100Hint();
   toggleAlcoholFields();
   updateMealFormMode();
+  renderFoodSuggestions();
 }
 function updateMealFormMode() {
   const editing = Boolean(state.editing.meal);
@@ -410,7 +501,7 @@ async function onMealSubmit(event) {
       per100: mealPer100, photoId: existing ? existing.photoId || null : null,
       createdAt: existing ? existing.createdAt : undefined
     };
-    if (mealProduct) assignDefined(record, { nutriscore: mealProduct.nutriscore, nova: mealProduct.nova });
+    if (mealProduct) assignDefined(record, { nutriscore: mealProduct.nutriscore, nova: mealProduct.nova, barcode: mealProduct.barcode });
     if (record.kind === "Alcool") {
       assignDefined(record, {
         volumeMl: readNumber(form, "volumeMl", { min: 0, max: 5000, decimals: 0, label: "Volume (ml)" }),
@@ -450,6 +541,7 @@ async function repeatMeal(id) {
 function renderNutrition() {
   safeRender("navigation par jour", renderDayNav);
   safeRender("totaux nutrition", renderNutritionTotals);
+  safeRender("trous dans le journal", renderGaps);
   safeRender("il te reste", renderRemaining);
   safeRender("ajout rapide", renderQuickAdd);
   safeRender("liste des repas", renderMealList);
@@ -470,7 +562,12 @@ function setupNutrition() {
     if (b) chooseAlcoholPreset(ALCOHOL_PRESETS[Number(b.dataset.alcohol)]);
   });
   form.elements.name.addEventListener("input", renderFoodSuggestions);
-  form.elements.grams.addEventListener("input", applyPer100);
+  form.elements.grams.addEventListener("input", () => { applyPer100(); if (mealCook) refreshCookRow(); });
+  document.getElementById("portion-unit").innerHTML = `<option value="">unité…</option>` + PORTION_UNITS.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("");
+  document.getElementById("portion-unit").addEventListener("change", onPortionChange);
+  document.getElementById("portion-count").addEventListener("input", onPortionChange);
+  document.getElementById("cook-row").addEventListener("click", (e) => { const b = e.target.closest("[data-cook]"); if (b) setWeighed(b.dataset.cook); });
+  form.elements.name.addEventListener("focus", () => { if (!form.elements.name.value) renderFoodSuggestions(); });
   ["kcal", "protein", "carbs", "fat", "fiber"].forEach((k) => form.elements[k].addEventListener("input", () => {
     if (mealPer100) { mealPer100 = null; updatePer100Hint(); }
   }));

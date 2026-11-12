@@ -7,6 +7,9 @@
    ========================================================================== */
 
 const SESSION_MODE_KEY = "pp-session-mode";
+const SM_DIM_KEY = "pp-sm-dim";            // écran noir entre les séries (oui par défaut)
+const SM_DIM_AFTER_MS = 15000;             // sans toucher l'écran pendant 15 s
+let smIdleTimer = null;
 const sm = { ex: 0, set: 0, pending: {} };   // pending : valeurs réglées pour la série active, pas encore validées
 
 function sessionDialog() { return document.getElementById("session-dialog"); }
@@ -29,10 +32,19 @@ function smShown(row, field) { return field in sm.pending ? sm.pending[field] : 
 /* Valeur retenue : affichée, sinon celle de la dernière fois (en gris). */
 function smValue(row, field) { return smNumber(smShown(row, field)) ?? smNumber(smInput(row, field).placeholder); }
 /* Écrit dans le formulaire les réglages en attente de la série active. */
-function smCommit(fields = ["load", "reps", "rp"]) {
+function smCommit(fields = ["load", "reps", "rp", "rp2", "rp3"]) {
   const row = smRows()[sm.set];
   if (row) fields.forEach((f) => { if (f in sm.pending) smWrite(row, f, smNumber(sm.pending[f])); });
   fields.forEach((f) => { delete sm.pending[f]; });
+  if (row) refreshSetMore(row);
+}
+/* Complément de rest-pause attendu sur cette série : « rp », puis « rp2 » / « rp3 » si tu as relancé une pause. */
+function smRpPhase(row) {
+  if (!smRowDone(row)) return null;
+  if (!(smNumber(smInput(row, "rp").value) > 0)) return "rp";
+  const open = Number(row.dataset.rpOpen) || 0;
+  if (open >= 2 && !(smNumber(smInput(row, `rp${open}`).value) > 0)) return `rp${open}`;
+  return null;
 }
 function smGoTo(ex, set) {
   smCommit();
@@ -99,7 +111,8 @@ function renderSessionMode() {
   document.getElementById("sm-meta").innerHTML = $(".exercise-meta", block).innerHTML;
 
   const list = rows.map((row, i) => {
-    const load = smInput(row, "load").value, reps = smInput(row, "reps").value, rpv = smInput(row, "rp").value;
+    const load = smInput(row, "load").value, reps = smInput(row, "reps").value;
+    const rpv = ["rp", "rp2", "rp3"].map((f) => smInput(row, f).value.trim()).filter(Boolean).join(" + ");
     const done = smRowDone(row);
     const prev = $(".set-prev", row).textContent;
     const text = done ? `${loadText(load) || "PDC"} × ${reps}${rpv ? ` + ${rpv}` : ""}` : `${loadText(load) || "charge ?"}${prev ? ` · ${prev}` : ""}`;
@@ -113,9 +126,10 @@ function renderSessionMode() {
     panel = `<p class="muted">Aucune série pour cet exercice.</p>`;
   } else {
     const repsSet = smRowDone(row);
-    const rpSet = smNumber(smInput(row, "rp").value) > 0;
-    const phaseRp = rp && repsSet && !rpSet;
+    const phase = rp ? smRpPhase(row) : null;      // complément attendu (rp, rp2, rp3) ou null
+    const phaseRp = Boolean(phase);
     const pause = rpPauseFor(name);
+    const nth = phase ? Number(phase.slice(2)) || 1 : 0;
     let buttons;
     if (!rp) {
       buttons = `<button type="button" class="primary-button sm-main" data-sm-action="done">Série faite → repos ${esc(fmtClock(restDuration()))}</button>`;
@@ -129,11 +143,15 @@ function renderSessionMode() {
       buttons = `<button type="button" class="primary-button sm-main" data-sm-action="next">Série suivante</button>`;
     }
     const prev = $(".set-prev", row).textContent;
+    const shownRp = (f) => phase === f || smInput(row, f).value.trim() !== "";
     panel = `<div class="sm-current">
-        <p class="eyebrow">SÉRIE ${sm.set + 1}${phaseRp ? " · COMPLÉMENT APRÈS LA PAUSE" : ""}${prev ? ` · <span class="sm-prev">${esc(prev)}</span>` : ""}</p>
+        <p class="eyebrow">SÉRIE ${sm.set + 1}${phaseRp ? ` · COMPLÉMENT${nth > 1 ? ` ${nth}` : ""} APRÈS LA PAUSE` : ""}${prev ? ` · <span class="sm-prev">${esc(prev)}</span>` : ""}</p>
         ${bw ? stepperHTML("load", "Lest (facultatif)", row, "kg", true, "PDC") : stepperHTML("load", "Charge", row, "kg", true)}
         ${stepperHTML("reps", "Reps avant l'échec", row, "reps", true)}
         ${rp ? stepperHTML("rp", "Complément (RP)", row, "reps", repsSet) : ""}
+        ${rp && shownRp("rp2") ? stepperHTML("rp2", "Complément 2 (RP)", row, "reps", true) : ""}
+        ${rp && shownRp("rp3") ? stepperHTML("rp3", "Complément 3 (RP)", row, "reps", true) : ""}
+        ${phaseRp && nth < 3 ? `<button type="button" class="secondary-button sm-more-rp" data-sm-action="more-rp">Complément fait → encore une pause (${esc(String(pause))} s)</button>` : ""}
         <p class="hint">En gris : tes chiffres de la dernière fois. Le bouton du bas les reprend tels quels si tu n'y touches pas.</p>
       </div>`;
     actions = buttons;
@@ -174,15 +192,27 @@ function smAction(action) {
   }
   if (action === "fail") {
     smCommit(["load", "reps"]);
-    startRestTimer(rpPauseFor(name), "Pause RP");
+    startRestTimer(rpPauseFor(name), "Pause RP", name);
     renderSessionMode();
     return;
   }
-  if (action === "done-rp") {
-    const rpv = smValue(row, "rp");
-    sm.pending.rp = rpv && rpv > 0 ? String(Math.round(rpv)) : "";
+  const phase = smRpPhase(row) || "rp";
+  if (action === "done-rp" || action === "more-rp") {
+    const rpv = smValue(row, phase);
+    if (action === "more-rp" && !(rpv > 0)) { showToast("Indique d'abord le complément que tu viens de faire.", "error"); return; }
+    sm.pending[phase] = rpv && rpv > 0 ? String(Math.round(rpv)) : "";
   }
-  if (action === "done-no-rp") sm.pending.rp = "";
+  if (action === "more-rp") {
+    /* Encore une pause dans la même série : on note le complément, puis pause RP et complément suivant. */
+    smCommit();
+    row.dataset.rpOpen = String((Number(phase.slice(2)) || 1) + 1);
+    refreshSetMore(row);
+    startRestTimer(rpPauseFor(name), "Pause RP", name);
+    renderSessionMode();
+    return;
+  }
+  if (action === "done-no-rp") sm.pending[phase] = "";
+  delete row.dataset.rpOpen;
   smCommit();
   if (action !== "next") startRestTimer(restDuration(), "Repos");
   smAdvance();
@@ -198,6 +228,40 @@ function smStep(field, dir) {
   if (input) input.value = sm.pending[field];
 }
 
+/* ---------- Écran noir entre les séries ----------
+   Le téléphone ne se verrouille pas pendant le mode séance (l'écran reste allumé, seulement ici) ;
+   sans toucher l'écran, il passe au noir (très peu de batterie). Un appui le rallume ; la fin du repos aussi. */
+function smDimEnabled() { return localGet(SM_DIM_KEY, true) !== false; }
+function smArmDim() {
+  clearTimeout(smIdleTimer);
+  if (!sessionModeOpen() || !smDimEnabled()) return;
+  smIdleTimer = setTimeout(smDim, SM_DIM_AFTER_MS);
+}
+function smDim() {
+  if (!sessionModeOpen() || !smDimEnabled()) return;
+  const el = document.activeElement;
+  if (el && el.matches && el.matches("input, textarea")) { smArmDim(); return; }   // saisie en cours au clavier
+  document.getElementById("sm-dim").hidden = false;
+  smDimRender();
+}
+function smDimRender() {
+  const dim = document.getElementById("sm-dim");
+  if (!dim || dim.hidden) return;
+  const left = restTimer.end ? Math.max(0, Math.ceil((restTimer.end - Date.now()) / 1000)) : null;
+  document.getElementById("sm-dim-label").textContent = left !== null ? restTimer.label : "Prochaine série";
+  document.getElementById("sm-dim-time").textContent = left !== null ? fmtClock(left) : "";
+  const row = smRows()[sm.set];
+  document.getElementById("sm-dim-next").textContent = row ? `${smName()} · série ${sm.set + 1}` : "";
+}
+function smWake() {
+  const dim = document.getElementById("sm-dim");
+  if (dim) dim.hidden = true;
+  smArmDim();
+}
+function renderDimToggle() {
+  document.getElementById("sm-dim-toggle").textContent = `Écran noir entre les séries : ${smDimEnabled() ? "oui" : "non"}`;
+}
+
 function openSessionMode(at = null) {
   if (!smBlocks().length) { showToast("Choisis une séance ou ajoute un exercice d'abord.", "error"); return; }
   const first = smFirstOpen();
@@ -208,6 +272,8 @@ function openSessionMode(at = null) {
   const dialog = sessionDialog();
   if (!dialog.open) dialog.showModal();
   keepScreenOn(true);
+  renderDimToggle();
+  smWake();
   renderSessionMode();
 }
 function closeSessionMode() {
@@ -234,6 +300,18 @@ function setupSessionMode() {
     $$(".exercise-block", editorEl()).forEach(renderBlockMeta);
     if (restTimer.end) tickRestTimer();
     keepScreenOn(false);
+    clearTimeout(smIdleTimer);
+    document.getElementById("sm-dim").hidden = true;
+  });
+  /* Toute action dans le mode séance repousse l'écran noir ; un appui sur l'écran noir le rallume
+     (sans déclencher le bouton qui est dessous). */
+  ["pointerdown", "keydown", "input"].forEach((ev) => dialog.addEventListener(ev, (e) => { if (!e.target.closest("#sm-dim")) smArmDim(); }));
+  document.getElementById("sm-dim").addEventListener("click", (e) => { e.stopPropagation(); smWake(); });
+  document.getElementById("sm-dim-toggle").addEventListener("click", () => {
+    localSet(SM_DIM_KEY, !smDimEnabled());
+    renderDimToggle();
+    smArmDim();
+    showToast(smDimEnabled() ? "Écran noir après 15 s sans toucher l'écran." : "Écran noir désactivé : l'écran reste normal (il ne se verrouille pas pendant la séance).");
   });
   const goExercise = (delta) => {
     const ex = Math.min(Math.max(0, sm.ex + delta), smBlocks().length - 1);
@@ -242,7 +320,8 @@ function setupSessionMode() {
   };
   document.getElementById("sm-prev").addEventListener("click", () => goExercise(-1));
   document.getElementById("sm-next").addEventListener("click", () => goExercise(1));
-  document.getElementById("sm-timer-more").addEventListener("click", () => addRestTime(15));
+  document.getElementById("sm-timer-more").addEventListener("click", () => addRestTime(5));
+  document.getElementById("sm-timer-less").addEventListener("click", () => addRestTime(-5));
   document.getElementById("sm-timer-stop").addEventListener("click", stopRestTimer);
   document.getElementById("sm-add-set").addEventListener("click", () => {
     smCommit();
@@ -251,6 +330,7 @@ function setupSessionMode() {
     renderSessionMode();
   });
   document.getElementById("sm-finish").addEventListener("click", smFinish);
+  document.getElementById("sm-replace").addEventListener("click", () => { smCommit(); if (smBlock()) openReplaceDialog(smBlock()); });
   dialog.addEventListener("click", (e) => {
     const setBtn = e.target.closest("[data-sm-set]");
     if (setBtn) { smGoTo(sm.ex, Number(setBtn.dataset.smSet)); renderSessionMode(); return; }
@@ -258,9 +338,14 @@ function setupSessionMode() {
     if (step) { smStep(step.dataset.smStep, Number(step.dataset.dir)); return; }
     const act = e.target.closest("[data-sm-action]");
     if (act) { smAction(act.dataset.smAction); return; }
-    /* « Appliquer +5 kg » du conseil de progression : même effet que dans le formulaire. */
-    const inc = e.target.closest('[data-action="apply-increment"]');
-    if (inc) { smCommit(); $('[data-action="apply-increment"]', smBlock())?.click(); renderSessionMode(); }
+    /* Boutons repris de la carte de l'exercice (« Appliquer +5 kg », « Garder les charges d'avant », « Remplacer ») :
+       même effet que dans le formulaire. */
+    const metaBtn = e.target.closest("[data-action]");
+    if (metaBtn) {
+      smCommit();
+      $(`[data-action="${metaBtn.dataset.action}"]`, smBlock())?.click();
+      if (metaBtn.dataset.action !== "replace-exercise") renderSessionMode();
+    }
   });
   /* Saisie au clavier dans les grands champs : gardée en attente jusqu'au bouton du bas. */
   dialog.addEventListener("input", (e) => {

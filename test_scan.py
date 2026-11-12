@@ -231,8 +231,10 @@ async def main():
         await page.evaluate("resetMealForm()")
         n_calls = len(off_calls)
         await manual("3017620422003")
-        check("Hors connexion : produit déjà scanné retrouvé sur l'appareil",
-              len(off_calls) == n_calls and await page.evaluate("mealForm().elements.name.value") == "Pâte à tartiner test (MarqueTest)")
+        n_before = await page.evaluate("state.dayMeals.filter(m => m.name === 'Pâte à tartiner test (MarqueTest)').length")
+        added = await page.evaluate("state.dayMeals.filter(m => m.name === 'Pâte à tartiner test (MarqueTest)')")
+        check("Hors connexion, produit déjà mangé : retrouvé sur l'appareil et ajouté tout seul avec ta portion (scan express)",
+              len(off_calls) == n_calls and "Déjà connu" in await page.inner_text("#toast") and len(added) == 2 and added[-1]["grams"] == 30 and added[-1]["barcode"] == "3017620422003", (await page.inner_text("#toast"), added))
         status = await manual("7613035676497")
         check("Hors connexion, produit jamais scanné : message clair", "Pas de réseau" in status, status)
         await page.click("#scan-close")

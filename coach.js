@@ -52,6 +52,7 @@ function collectDay(date, meals) {
     date, weighIn, tape, meals,
     well: state.wellbeing.find((w) => w.date === date) || null,
     workouts: state.workouts.filter((w) => w.date === date).slice().reverse(),
+    runs: (state.runs || []).filter((r) => r.date === date).slice().reverse(),
     test: state.battery.find((t) => t.date === date) || null
   };
 }
@@ -68,7 +69,7 @@ function dayToJSON(day) {
       proteines_g: num(m.protein), glucides_g: num(m.carbs), lipides_g: num(m.fat), fibres_g: num(m.fiber),
       nutriscore: m.nutriscore || undefined, nova: m.nova || undefined
     }))
-  }));
+  })).filter((r) => r.aliments.length);   // moment de la journée sans aliment : omis (un jour vide n'est pas « renseigné »)
   const cardio = [];
   day.workouts.forEach((wo) => {
     if (wo.bikeTimeS || wo.bikeKm) cardio.push({ type: "velo", distance_km: num(wo.bikeKm, 2), duree_s: num(wo.bikeTimeS, 0), niveau: num(wo.bikeLevel, 0) });
@@ -76,8 +77,10 @@ function dayToJSON(day) {
     if (wo.cardio) cardio.push({ type: "autre", description: wo.cardio });
   });
   const t = day.test || {};
+  const goal = dayTargetsEnabled() ? targetsFor(day.date) : null;
   return pruneEmpty({
     date: day.date,
+    type_journee: goal ? { type: { full: "complet", semi: "semi", rest: "sans_sport" }[goal.dayType], choisi: goal.dayAuto ? undefined : true, objectif_kcal: goal.kcal } : undefined,
     pesee: day.weighIn ? { poids_kg: num(day.weighIn.weight, 2), moment: day.weighIn.moment ? day.weighIn.moment.toLowerCase() : undefined } : undefined,
     sommeil: { heures: num(w.sleep, 2), qualite_5: num(w.sleepQuality, 0) },
     ressenti_10: { fatigue: num(w.fatigue, 0), stress: num(w.stress, 0), motivation: num(w.motivation, 0) },
@@ -97,11 +100,20 @@ function dayToJSON(day) {
       exercices: (wo.exercises || []).map((e) => ({
         nom: e.name,
         poids_du_corps: e.bodyweight ? true : undefined,
-        series: validSets(e.sets).map((s) => ({ charge_kg: num(s.load, 2), reps: num(s.reps, 0), reps_rest_pause: num(s.rpReps, 0), pause_s: s.rpReps ? num(s.rpPause, 0) : undefined }))
+        series: validSets(e.sets).map((s) => ({ charge_kg: num(s.load, 2), reps: num(s.reps, 0), reps_rest_pause: num(s.rpReps, 0),
+          reps_pauses_suivantes: s.rpReps && s.rpExtra && s.rpExtra.length ? s.rpExtra.map((x) => num(x, 0)) : undefined, pause_s: s.rpReps ? num(s.rpPause, 0) : undefined }))
       })),
       notes: wo.notes
     })),
     cardio,
+    courses: (day.runs || []).map((r) => ({
+      heure: r.startTime, nom: r.planStep ? undefined : r.name, duree_min: r.durationS ? num(r.durationS / 60, 1) : undefined,
+      temps_course_min: r.runS ? num(r.runS / 60, 1) : undefined, distance_km: num(r.distanceKm, 2),
+      allure_min_km: runPaceText(r).replace("/km", "") || undefined, etape_plan: num(r.planStep, 0),
+      seance_plan: r.planStep ? runStepText(r.planStep) : undefined, terminee: r.planStep ? Boolean(r.completed) : undefined,
+      douleur_genou: { pendant: num(r.painDuring, 1), apres: num(r.painAfter, 1), lendemain: num(r.painNext, 1) },
+      effort_10: num(r.effort, 0), denivele_m: num(r.elevationM, 0), fc_moyenne: num(r.avgHr, 0), source: r.source, notes: r.notes
+    })),
     mesures: day.tape ? {
       tour_de_taille_cm: num(day.tape.waist), tour_de_ventre_cm: num(day.tape.belly), tour_de_poitrine_cm: num(day.tape.chest),
       tour_de_bras_cm: num(day.tape.arm), tour_de_cuisse_cm: num(day.tape.thigh)
@@ -153,6 +165,10 @@ function dayToText(day) {
     const t = mealTotals(day.meals);
     const alcoholKcal = sum(drinks, "kcal");
     L.push(`Totaux : ${fmt(t.kcal, 0)} kcal${drinks.length ? ` (dont alcool ${fmt(alcoholKcal, 0)})` : ""} · P ${fmt(t.protein, 0)} g · G ${fmt(t.carbs, 0)} g · L ${fmt(t.fat, 0)} g · fibres ${fmt(t.fiber, 0)} g`);
+    if (dayTargetsEnabled()) {
+      const goal = targetsFor(day.date);
+      L.push(`Objectif du jour : journée ${DAY_TYPE_LABEL[goal.dayType].toLowerCase()}${goal.dayAuto ? "" : " (choisie)"} · ${dayTargetsText(goal)}`);
+    }
   }
   day.workouts.forEach((wo) => {
     L.push(`Séance : ${wo.sessionType}${wo.duration ? ` (${fmt(wo.duration, 0)} min)` : ""}`);
@@ -162,6 +178,11 @@ function dayToText(day) {
       L.push(`- ${e.name} : ${sets.map((s) => fmtSet(s, e.bodyweight)).join(", ").replace(/ /g, " ")}${rp ? ` (rest-pause${rp.rpPause ? `, pause ${fmt(rp.rpPause, 0)} s` : ""})` : ""}`);
     });
     if (wo.notes) L.push(`- Notes : ${wo.notes}`);
+  });
+  (day.runs || []).forEach((r) => {
+    const pain = [["painDuring", "pendant"], ["painAfter", "après"], ["painNext", "lendemain"]].filter(([k]) => r[k] !== undefined && r[k] !== null).map(([k, l]) => `${l} ${fmt(r[k], 1)}/10`);
+    const plan = r.planStep ? `étape ${r.planStep} du plan (${runStepText(r.planStep)}) ${r.completed ? "terminée" : "interrompue"}` : r.name || "";
+    L.push(`Course : ${[plan, runSummaryText(r), r.effort ? `effort ${fmt(r.effort, 0)}/10` : "", pain.length ? `genou ${pain.join(", ")}` : "", r.notes].filter(Boolean).join(" · ").replace(/\u00a0/g, " ")}`);
   });
   const cardio = day.workouts.map(workoutCardioText).filter(Boolean).join(" · ").split(" · ").filter(Boolean)
     .map((part) => part.charAt(0).toLowerCase() + part.slice(1));
@@ -198,7 +219,7 @@ async function buildPeriodExport(from, to) {
   meals.forEach((m) => { if (!byDay.has(m.date)) byDay.set(m.date, []); byDay.get(m.date).push(m); });
   const dates = datesBetween(from, to);
   const jours = dates.map((d) => dayToJSON(collectDay(d, (byDay.get(d) || []).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)))))
-    .filter((j) => Object.keys(j).length > 1);
+    .filter((j) => Object.keys(j).some((k) => k !== "date" && k !== "type_journee"));
   const g = state.targets;
   return pruneEmpty({
     export: {
@@ -206,7 +227,13 @@ async function buildPeriodExport(from, to) {
       application: `Personal Performance ${APP_VERSION}`, jours_periode: dates.length, jours_renseignes: jours.length,
       echelles: { ressenti: "1 à 10", sommeil_qualite: "1 à 5", douleur: "0 à 10" }
     },
-    objectifs: { kcal: g.kcal, proteines_g: g.protein, glucides_g: g.carbs, lipides_g: g.fat, fibres_g: g.fiber, poids_cible_kg: g.weight },
+    objectifs: dayTargetsEnabled()
+      ? {
+        fibres_g: g.fiber, poids_cible_kg: g.weight,
+        par_journee: Object.fromEntries(DAY_TYPES.filter(([k]) => g.days[k]).map(([k]) => [{ full: "complet", semi: "semi", rest: "sans_sport" }[k],
+          { kcal: g.days[k].kcal, proteines_g: g.days[k].protein, glucides_g: g.days[k].carbs, lipides_g: g.days[k].fat }]))
+      }
+      : { kcal: g.kcal, proteines_g: g.protein, glucides_g: g.carbs, lipides_g: g.fat, fibres_g: g.fiber, poids_cible_kg: g.weight },
     jours
   });
 }

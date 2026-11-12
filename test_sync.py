@@ -34,13 +34,13 @@ CONFIG = f"""const firebaseConfig = {{
 EMAIL, PASSWORD = "tristan@example.com", "motdepasse-app"
 
 class FakeFirebase:
-    """Simule Firebase Authentication (REST), le renouvellement de jeton et Firestore (commit, runQuery)."""
+    """Simule Firebase Authentication (REST), le renouvellement de jeton et Firestore (commit, runQuery, lecture d'une fiche)."""
     def __init__(self):
         self.users = {EMAIL: {"password": PASSWORD, "uid": "uidTristan"}}
         self.docs = {}            # nom complet -> {"fields": {...}}
         self.clock = datetime(2026, 11, 5, 18, 0, 0, tzinfo=timezone.utc)
         self.revoked = set()
-        self.calls = {"commit": 0, "query": 0, "writes": 0}
+        self.calls = {"commit": 0, "query": 0, "writes": 0, "deletes": 0, "other_writes": 0, "other_queries": 0}
     def now(self):
         self.clock += timedelta(microseconds=137)
         return self.clock.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -56,7 +56,7 @@ class FakeFirebase:
             return route.fulfill(status=status, content_type="application/json", body=json.dumps(body),
                                  headers={"access-control-allow-origin": "*"})
         if req.method == "OPTIONS":
-            return await route.fulfill(status=204, headers={"access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "POST"})
+            return await route.fulfill(status=204, headers={"access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "POST, GET"})
         if url.netloc == "identitytoolkit.googleapis.com":
             if qs.get("key", [""])[0] != API_KEY:
                 return await reply(400, {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.", "status": "INVALID_ARGUMENT"}})
@@ -83,22 +83,41 @@ class FakeFirebase:
             if path == root + ":commit":
                 t = self.now()
                 for w in body.get("writes", []):
-                    name = w["update"]["name"]
+                    name = w["update"]["name"] if "update" in w else w["delete"]
                     if f"/users/{uid}/" not in name:
                         return await reply(403, {"error": {"code": 403, "message": "Missing or insufficient permissions.", "status": "PERMISSION_DENIED"}})
+                    if "delete" in w:
+                        self.docs.pop(name, None)
+                        self.calls["deletes"] += 1
+                        continue
                     fields = dict(w["update"]["fields"])
                     for tr in w.get("updateTransforms", []):
                         if tr.get("setToServerValue") == "REQUEST_TIME":
                             fields[tr["fieldPath"]] = {"timestampValue": t}
                     self.docs[name] = {"fields": fields}
-                    self.calls["writes"] += 1
+                    if "/records/" in name:
+                        self.calls["writes"] += 1
+                    else:
+                        self.calls["other_writes"] += 1
                 self.calls["commit"] += 1
                 return await reply(200, {"writeResults": [{"updateTime": t} for _ in body.get("writes", [])], "commitTime": t})
             if path == f"{root}/users/{uid}:runQuery":
-                self.calls["query"] += 1
                 q = body["structuredQuery"]
-                prefix = f"projects/{PROJECT}/databases/(default)/documents/users/{uid}/records/"
+                coll = q["from"][0]["collectionId"]
+                prefix = f"projects/{PROJECT}/databases/(default)/documents/users/{uid}/{coll}/"
                 rows = [(n, d) for n, d in self.docs.items() if n.startswith(prefix)]
+                if coll != "records":
+                    # Autres collections (copies de sécurité) : tri simple sur un champ entier.
+                    self.calls["other_queries"] += 1
+                    order = q.get("orderBy", [{}])[0]
+                    fp = order.get("field", {}).get("fieldPath")
+                    if fp:
+                        rows.sort(key=lambda x: int(x[1]["fields"].get(fp, {}).get("integerValue", "0")), reverse=order.get("direction") == "DESCENDING")
+                    rows = rows[: q.get("limit", 1000)]
+                    rt = self.now()
+                    out = [{"document": {"name": n, "fields": d["fields"], "createTime": rt, "updateTime": rt}, "readTime": rt} for n, d in rows]
+                    return await reply(200, out or [{"readTime": rt}])
+                self.calls["query"] += 1
                 rows.sort(key=lambda x: (x[1]["fields"]["serverTime"]["timestampValue"], x[0]))
                 start = q.get("startAt")
                 if start:
@@ -114,6 +133,10 @@ class FakeFirebase:
                 rt = self.now()
                 out = [{"document": {"name": n, "fields": d["fields"], "createTime": rt, "updateTime": rt}, "readTime": rt} for n, d in rows]
                 return await reply(200, out or [{"readTime": rt}])
+            if req.method == "GET" and path.startswith(f"{root}/users/{uid}/"):
+                name = path[len("/v1/"):]
+                if name in self.docs:
+                    return await reply(200, {"name": name, "fields": self.docs[name]["fields"]})
             return await reply(404, {"error": {"code": 404, "message": "not found", "status": "NOT_FOUND"}})
         return await route.continue_()
 
@@ -303,7 +326,58 @@ async def main():
         await B.evaluate("""(async () => { await deleteRecord('rec1'); await setSetting('syncDirty', {}); const a = await getSetting('syncAccount');
           delete a.typesVersion; await setSetting('syncAccount', a); })()""")
         await B.reload(); await B.wait_for_timeout(2500)
-        check("Mise à jour depuis la 3.1 : fiches ignorées autrefois récupérées", await B.evaluate("state.recipes.some(r => r.id === 'rec1')") and (await B.evaluate("getSetting('syncAccount')"))["typesVersion"] == 2)
+        check("Mise à jour depuis la 3.1 : fiches ignorées autrefois récupérées", await B.evaluate("state.recipes.some(r => r.id === 'rec1')") and (await B.evaluate("getSetting('syncAccount')"))["typesVersion"] == 3)
+
+        # ---------- Version 3.7 : courses synchronisées ----------
+        await A.evaluate("saveRun({ id: 'run-sync', source: 'app', date: today(), planStep: 1, completed: true, durationS: 1920, painDuring: 1 })")
+        await A.wait_for_timeout(3500)
+        await B.evaluate("syncNow({manual:true})"); await B.wait_for_timeout(1200)
+        check("Course notée sur le téléphone : reçue sur le PC (plan de reprise à jour)", await B.evaluate("state.runs.some(r => r.id === 'run-sync') && runPlanState().ok === 1"))
+
+        # ---------- Version 3.6 : copies de sécurité hebdomadaires dans Firebase ----------
+        idx_prefix = f"projects/{PROJECT}/databases/(default)/documents/users/uidTristan/backupIndex/"
+        part_prefix = f"projects/{PROJECT}/databases/(default)/documents/users/uidTristan/backups/"
+        def cloud_index(): return {n[len(idx_prefix):]: d["fields"] for n, d in fake.docs.items() if n.startswith(idx_prefix)}
+        def cloud_parts(): return sorted(n[len(part_prefix):] for n in fake.docs if n.startswith(part_prefix))
+        first = cloud_index()
+        check("Copie de sécurité faite automatiquement après la 1re synchro (une seule pour les 2 appareils)", len(first) == 1 and len(cloud_parts()) == 1, (list(first), cloud_parts()))
+        info = await A.evaluate("""(async () => { const l = await listCloudBackups(); const j = JSON.parse(await fetchCloudBackupText(l[0]));
+          return [l.length, l[0].records, j.records.length, l[0].encoding, j.app, Boolean(j.settings && j.settings.program)]; })()""")
+        check("Copie compressée, relisible, complète (entrées + programme)", info[0] == 1 and info[1] == info[2] and info[2] > 0 and info[3] == "gzip-base64" and info[4] == "Personal Performance" and info[5], info)
+        q_before = fake.calls["other_queries"]
+        await A.evaluate("syncNow({manual:true})"); await A.wait_for_timeout(1200)
+        check("Vérification de la copie : une fois par jour seulement", fake.calls["other_queries"] == q_before, fake.calls)
+        # Copie en plusieurs morceaux (gros historique) : on coupe le morceau en deux dans le faux Firebase.
+        only = list(first)[0]
+        part0 = fake.docs[part_prefix + only + "-0"]["fields"]["data"]["stringValue"]
+        half = len(part0) // 2
+        fake.docs[part_prefix + only + "-0"]["fields"]["data"]["stringValue"] = part0[:half]
+        fake.docs[part_prefix + only + "-1"] = {"fields": {"backupId": {"stringValue": only}, "part": {"integerValue": "1"}, "data": {"stringValue": part0[half:]}}}
+        fake.docs[idx_prefix + only]["fields"]["parts"] = {"integerValue": "2"}
+        n = await A.evaluate("(async () => { const l = await listCloudBackups(); return JSON.parse(await fetchCloudBackupText(l[0])).records.length; })()")
+        check("Copie en plusieurs morceaux : recollée correctement", n == info[2], n)
+        # 9 copies de plus : on garde les 8 dernières, les morceaux des autres sont effacés.
+        await A.evaluate("(async () => { for (let i = 0; i < 9; i++) await createCloudBackup(); })()")
+        idx = cloud_index()
+        expected = sorted(f"{i}-{k}" for i, f in idx.items() for k in range(int(f["parts"]["integerValue"])))
+        check("10 copies : les 8 plus récentes gardées, la plus ancienne effacée avec ses morceaux", len(idx) == 8 and only not in idx and cloud_parts() == expected, (len(idx), len(cloud_parts())))
+        # Restauration : un repas supprimé par erreur revient depuis la copie (mode Fusionner), et repart vers les autres appareils.
+        await A.evaluate("""saveRecords([{id:'cloud1',type:'meal',date:today(),kind:'Dîner',name:'Repas à sauver',kcal:640,protein:40,carbs:60,fat:20,fiber:5}]).then(() => reloadAll())""")
+        await A.wait_for_timeout(2500)
+        await A.evaluate("createCloudBackup()")
+        await A.evaluate("deleteRecord('cloud1').then(() => reloadAll())"); await A.wait_for_timeout(500)
+        await A.evaluate("syncNow({manual:true})"); await A.wait_for_timeout(1500)
+        gone = fake.records()["cloud1"]["deleted"]["booleanValue"]
+        await A.click("button[data-view=settings]"); await A.wait_for_timeout(200)
+        await A.click("#cloud-backup-show"); await A.wait_for_timeout(1200)
+        items = await A.locator("#cloud-backup-list .backup-item").count()
+        await A.click("#cloud-backup-list [data-cloud-restore='0'][data-mode=merge]"); await A.wait_for_timeout(2500)
+        back = await A.evaluate("state.recentMeals.some(m => m.id === 'cloud1')")
+        await A.wait_for_timeout(2500)
+        await B.evaluate("syncNow({manual:true})"); await B.wait_for_timeout(1500)
+        check("Liste des copies affichée (8) et restauration « Fusionner » : le repas supprimé revient, aussi sur le PC",
+              items == 8 and gone and back and not fake.records()["cloud1"]["deleted"]["booleanValue"] and await B.evaluate("state.recentMeals.some(m => m.id === 'cloud1')"),
+              (items, gone, back))
 
         check("Aucune erreur JavaScript", not errors, errors[:5])
         print("Appels simulés :", fake.calls)

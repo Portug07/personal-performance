@@ -98,12 +98,17 @@ async def main():
         await page.select_option("#workout-form [name=session]", "push"); await page.wait_for_timeout(200)
         meta = await page.inner_text(".exercise-block:first-child .exercise-meta")
         check("Dernière performance affichée", "Dernière fois" in meta and "65 × 12" in meta, meta.replace("\n", " | "))
-        check("Conseil de progression (+2,5 kg)", "ajoute 2,5 kg" in meta)
+        check("Progression automatique : seuil atteint → charges déjà augmentées (+2,5 kg)", "déjà augmentées de +2,5 kg" in meta, meta.replace("\n", " | "))
         prev = await page.inner_text(".exercise-block:first-child .set-row:first-child .set-prev")
         check("Série précédente rappelée sur chaque ligne", "65 × 12" in prev, prev)
+        loads = await page.eval_on_selector_all('.exercise-block:first-child [data-field="load"]', "els=>els.map(e=>e.value)")
+        check("Charges proposées : +2,5 kg sur chaque série", loads == ["67,5", "67,5", "72,5", "72,5"], loads)
+        await page.click('.exercise-block:first-child [data-action="undo-increment"]')
+        loads = await page.eval_on_selector_all('.exercise-block:first-child [data-field="load"]', "els=>els.map(e=>e.value)")
+        check("« Garder les charges d'avant » annule l'augmentation", loads == ["65", "65", "70", "70"], loads)
         await page.click('.exercise-block:first-child [data-action="apply-increment"]')
         loads = await page.eval_on_selector_all('.exercise-block:first-child [data-field="load"]', "els=>els.map(e=>e.value)")
-        check("Bouton Appliquer : +2,5 kg sur chaque série", loads == ["67,5", "67,5", "72,5", "72,5"], loads)
+        check("Puis « Appliquer » la remet", loads == ["67,5", "67,5", "72,5", "72,5"], loads)
         for i in range(4): await fill_set(page, 0, i, reps=10)
         # brouillon : on recharge la page en pleine séance
         await page.wait_for_timeout(600)
@@ -395,7 +400,7 @@ async def main():
         async with page.expect_download() as dl:
             await page.click("#export-workouts-csv")
         csv3 = open(await (await dl.value).path(), encoding="utf-8-sig").read()
-        check("CSV des séances avec le complément de rest-pause", "complement_rest_pause" in csv3.splitlines()[0] and '"Tirage vertical";"1";"70";"8";"7";"20"' in csv3, csv3.splitlines()[0])
+        check("CSV des séances avec le complément de rest-pause", "complement_rest_pause" in csv3.splitlines()[0] and '"Tirage vertical";"1";"70";"8";"7";"";"20"' in csv3, csv3.splitlines()[0])
 
         # ---------- Hors connexion ----------
         await page.reload(); await page.wait_for_timeout(800)

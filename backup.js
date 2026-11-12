@@ -184,9 +184,9 @@ async function exportMealsCSV() {
   showToast(`${plural(meals.length, "repas exporté", "repas exportés")}.`);
 }
 async function exportWorkoutsCSV() {
-  const rows = [["date", "seance", "exercice", "serie", "charge_kg", "repetitions_avant_echec", "complement_rest_pause", "pause_s", "duree_min"]];
+  const rows = [["date", "seance", "exercice", "serie", "charge_kg", "repetitions_avant_echec", "complement_rest_pause", "complements_suivants", "pause_s", "duree_min"]];
   state.workouts.slice().reverse().forEach((w) => (w.exercises || []).forEach((e) => (e.sets || []).forEach((s, i) => {
-    rows.push([w.date, w.sessionType, e.name, i + 1, s.load ?? "", s.reps ?? "", s.rpReps ?? "", s.rpReps ? (s.rpPause ?? "") : "", w.duration ?? ""]);
+    rows.push([w.date, w.sessionType, e.name, i + 1, s.load ?? "", s.reps ?? "", s.rpReps ?? "", (s.rpExtra || []).join("+"), s.rpReps ? (s.rpPause ?? "") : "", w.duration ?? ""]);
   })));
   downloadCSV(`seances-${today()}.csv`, rows);
   showToast(`${plural(rows.length - 1, "série exportée", "séries exportées")}.`);

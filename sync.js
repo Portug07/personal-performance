@@ -44,7 +44,7 @@ function parseFirebaseConfig(text) {
 
 /* Version des types d'entrées connus (3.2 : repas habituels et recettes). Une version plus ancienne
    de l'app a pu ignorer ces fiches en les recevant : on relit alors tout Firebase une fois. */
-const SYNC_TYPES_VERSION = 2;
+const SYNC_TYPES_VERSION = 3;
 async function loadSyncAccount() {
   syncAccount = await getSetting("syncAccount", null);
   syncTracking = Boolean(syncAccount && syncAccount.refreshToken);
@@ -82,6 +82,7 @@ function syncErrorText(code, context, status) {
   if (/API key not valid|API_KEY_INVALID/.test(code)) return "Configuration Firebase invalide : vérifie le bloc collé (apiKey).";
   if (/OPERATION_NOT_ALLOWED|CONFIGURATION_NOT_FOUND/.test(code)) return "Active la connexion « Adresse e-mail/Mot de passe » dans Firebase Authentication.";
   if (/TOKEN_EXPIRED|INVALID_REFRESH_TOKEN|USER_NOT_FOUND|UNAUTHENTICATED/.test(code) || status === 401) return "Ta session a expiré : reconnecte-toi pour reprendre la synchro.";
+  if ((/PERMISSION_DENIED/.test(code) || status === 403) && /copie/.test(context)) return "Firestore refuse les copies de sécurité : remplace tes règles par celles du README (partie « Copies de sécurité »). Ta synchro, elle, continue.";
   if (/PERMISSION_DENIED/.test(code) || status === 403) return "Accès refusé par Firestore : vérifie les règles collées dans la console Firebase.";
   if (/NOT_FOUND/.test(code) || status === 404) return "Base Firestore introuvable : vérifie qu'elle est bien créée dans ton projet.";
   if (/RESOURCE_EXHAUSTED/.test(code) || status === 429) return "Quota gratuit du jour atteint : la synchro reprendra demain.";
@@ -297,8 +298,10 @@ async function syncNow({ manual = false } = {}) {
       syncAccount.lastSyncAt = Date.now();
       await saveSyncAccount();
       setSyncStatus("ok");
+      /* Copie de sécurité hebdomadaire (vérifiée une fois par jour, sans bloquer la synchro). */
+      if (typeof maybeCloudBackup === "function") maybeCloudBackup();
       if (pulled.changed || pulled.settingsChanged) {
-        await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery()]);
+        await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery(), reloadRuns()]);
         /* Pas de rafraîchissement des Réglages en cours d'édition (programme, objectifs). */
         if (state.view !== "settings") renderView(state.view);
         if (manual || pulled.changed) showToast(`Synchro : ${plural(pulled.changed + pulled.settingsChanged, "changement reçu", "changements reçus")}.`);

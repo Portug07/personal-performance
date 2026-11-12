@@ -15,9 +15,9 @@ function templateItem(m) {
 function itemsKcal(items) { return items.reduce((a, i) => a + (Number(i.kcal) || 0), 0); }
 
 /* Ajoute des aliments au jour affiché. Renvoie les entrées créées (pour « Annuler »). */
-async function addItemsToDay(items, kind) {
+async function addItemsToDay(items, kind, date = state.nutritionDate) {
   const created = items.map((i) => ({
-    ...cleanMealFields(i), id: uid(), type: "meal", date: state.nutritionDate,
+    ...cleanMealFields(i), id: uid(), type: "meal", date,
     kind: i.kind === "Alcool" ? "Alcool" : (MEAL_KINDS.includes(kind) ? kind : i.kind), photoId: null
   }));
   await saveRecords(created);
@@ -128,6 +128,11 @@ async function onQuickClick(e) {
     const kind = btn.dataset.kind;
     const items = state.prevDayMeals.filter((m) => m.kind === kind);
     await withBusy(btn, async () => quickAddToast(await addItemsToDay(items, kind)));
+  } else if (action === "combo-dismiss") {
+    const list = localGet(COMBO_DISMISS_KEY, []) || [];
+    list.push(btn.dataset.sig);
+    localSet(COMBO_DISMISS_KEY, list.slice(-100));
+    renderMealList();
   } else if (action === "copy-day") {
     await withBusy(btn, async () => quickAddToast(await addItemsToDay(state.prevDayMeals, null)));
   }
@@ -141,6 +146,10 @@ function setupRemaining() {
 }
 function setupQuickMeals() {
   setupRemaining();
+  document.getElementById("gaps-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-gap]");
+    if (b) withBusy(b, () => onGapClick(b));
+  });
   document.getElementById("view-nutrition").addEventListener("click", (e) => { onQuickClick(e).catch((err) => showToast(humanError(err), "error")); });
   document.getElementById("templates-manage").addEventListener("click", () => { quickManage = !quickManage; renderQuickAdd(); });
   const dialog = document.getElementById("template-dialog");
@@ -176,7 +185,7 @@ let remainingIdeas = [];
 function habitualFoods() {
   const count = new Map();
   const last = new Map();
-  state.recentMeals.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach((m) => {
+  state.recentMeals.slice().sort(newestFirst).forEach((m) => {
     if (isAlcoholEntry(m) || !(m.kcal > 0)) return;
     const k = fold(m.name);
     count.set(k, (count.get(k) || 0) + 1);
@@ -225,7 +234,7 @@ function remainingSuggestions(remKcal, remProt) {
 }
 function renderRemaining() {
   const panel = document.getElementById("remaining-panel");
-  const g = state.targets;
+  const g = targetsFor(today());
   if (state.nutritionDate !== today() || !(g.kcal || g.protein)) { panel.hidden = true; remainingIdeas = []; return; }
   panel.hidden = false;
   const t = mealTotals(state.dayMeals);
@@ -233,6 +242,8 @@ function renderRemaining() {
   const remProt = g.protein ? g.protein - t.protein : 0;
   const text = document.getElementById("remaining-text");
   const box = document.getElementById("remaining-ideas");
+  /* Menu de la suite de la journée : seulement s'il reste de quoi faire au moins un repas. */
+  document.getElementById("menu-open").hidden = !(g.kcal && remKcal >= 150 && remainingKinds().length);
   const parts = [];
   if (g.kcal) parts.push(remKcal > 0 ? `<b>${fmt(remKcal, 0)} kcal</b>` : `<b class="danger-text">${fmt(-remKcal, 0)} kcal de trop</b>`);
   if (g.protein) parts.push(remProt > 0 ? `<b>${fmt(remProt, 0)} g de protéines</b>` : "tes protéines atteintes ✓");
@@ -271,4 +282,95 @@ function useRemainingIdea(f) {
   updatePer100Hint();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   showToast("Formulaire pré-rempli : ajuste la portion si besoin, puis « Ajouter au journal ».");
+}
+
+/* ---------- Repas habituel repéré tout seul ----------
+   Même combinaison d'aliments (au moins 2) au même moment de la journée, 3 fois en 30 jours. */
+const COMBO_DISMISS_KEY = "pp-combo-dismissed";
+function comboSignature(items) { return items.map((m) => fold(m.name)).sort().join("|"); }
+function comboSuggestion(kind, group) {
+  if (group.length < 2 || kind === "Alcool") return null;
+  const sig = comboSignature(group);
+  if ((localGet(COMBO_DISMISS_KEY, []) || []).includes(`${kind}#${sig}`)) return null;
+  if (state.mealTemplates.some((t) => comboSignature(t.items) === sig)) return null;
+  const from = addDays(state.nutritionDate, -30);
+  const byDay = new Map();
+  state.recentMeals.forEach((m) => {
+    if (m.kind !== kind || m.date === state.nutritionDate || m.date < from) return;
+    if (!byDay.has(m.date)) byDay.set(m.date, []);
+    byDay.get(m.date).push(m);
+  });
+  const others = [...byDay.values()].filter((list) => comboSignature(list) === sig).length;
+  return others >= 2 ? { sig: `${kind}#${sig}`, times: others + 1 } : null;
+}
+
+/* ---------- Trous dans le journal ----------
+   Hier et avant-hier : un repas principal que tu notes d'habitude manque ? On le signale, avec de quoi
+   le compléter en un appui. Rien n'est signalé avant ton premier jour de saisie. */
+const GAP_DISMISS_KEY = "pp-gaps-dismissed";
+const GAP_KINDS = ["Petit-déjeuner", "Déjeuner", "Dîner"];
+let gapItems = [];
+function findGaps() {
+  const meals = state.recentMeals;
+  if (!meals.length) return [];
+  const first = meals.reduce((a, m) => (m.date < a ? m.date : a), meals[0].date);
+  const days = new Map();
+  meals.forEach((m) => { if (!days.has(m.date)) days.set(m.date, new Set()); days.get(m.date).add(m.kind); });
+  /* Habitude : ce repas est noté au moins un jour sur deux, sur les 14 derniers jours renseignés. */
+  const recent = [...days.keys()].filter((d) => d < today() && d >= addDays(today(), -15));
+  const usual = GAP_KINDS.filter((k) => recent.length >= 3 && recent.filter((d) => days.get(d).has(k)).length / recent.length >= 0.5);
+  const dismissed = localGet(GAP_DISMISS_KEY, []) || [];
+  const gaps = [];
+  [1, 2].forEach((n) => {
+    const d = addDays(today(), -n);
+    if (d <= first) return;
+    const kinds = days.get(d) || new Set();
+    usual.forEach((k) => { if (!kinds.has(k) && !dismissed.includes(`${d}|${k}`)) gaps.push({ date: d, kind: k }); });
+  });
+  return gaps;
+}
+function renderGaps() {
+  const panel = document.getElementById("gaps-panel");
+  gapItems = findGaps();
+  panel.hidden = !gapItems.length;
+  if (!gapItems.length) return;
+  document.getElementById("gaps-list").innerHTML = gapItems.map((g, i) => {
+    const tpl = state.mealTemplates.find((t) => t.kind === g.kind);
+    const dayLabel = g.date === addDays(today(), -1) ? "Hier" : "Avant-hier";
+    return `<div class="gap-item">
+      <span><b>${dayLabel}</b> · pas de ${esc(g.kind.toLowerCase())} noté</span>
+      <span class="gap-actions">
+        ${tpl ? `<button type="button" class="small-button" data-gap="template" data-i="${i}">${esc(tpl.name)}</button>` : ""}
+        <button type="button" class="small-button" data-gap="enter" data-i="${i}">Saisir</button>
+        <button type="button" class="small-button" data-gap="skipped" data-i="${i}">Pas mangé</button>
+        <button type="button" class="link-button" data-gap="dismiss" data-i="${i}" aria-label="Ne plus le signaler">Ignorer</button>
+      </span>
+    </div>`;
+  }).join("");
+}
+async function onGapClick(btn) {
+  const g = gapItems[Number(btn.dataset.i)];
+  if (!g) return;
+  const action = btn.dataset.gap;
+  if (action === "template") {
+    const tpl = state.mealTemplates.find((t) => t.kind === g.kind);
+    const created = await addItemsToDay(tpl.items, g.kind, g.date);
+    showToast(`${tpl.name} ajouté au ${fmtDate(g.date)}.`, "ok", { label: "Annuler", run: () => undoQuickAdd(created) });
+  } else if (action === "skipped") {
+    /* Repas sauté : une entrée à 0 kcal, pour que ton coach sache que ce n'est pas un oubli. */
+    const created = await addItemsToDay([{ kind: g.kind, name: "Repas sauté", quantity: "pas mangé", kcal: 0 }], g.kind, g.date);
+    showToast(`Noté : pas de ${g.kind.toLowerCase()} le ${fmtDate(g.date)}.`, "ok", { label: "Annuler", run: () => undoQuickAdd(created) });
+  } else if (action === "enter") {
+    await setNutritionDate(g.date);
+    const form = mealForm();
+    form.elements.kind.value = g.kind;
+    form.elements.date.value = g.date;
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    form.elements.name.focus();
+  } else if (action === "dismiss") {
+    const list = localGet(GAP_DISMISS_KEY, []) || [];
+    list.push(`${g.date}|${g.kind}`);
+    localSet(GAP_DISMISS_KEY, list.slice(-60));
+    renderGaps();
+  }
 }

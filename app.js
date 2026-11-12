@@ -7,7 +7,7 @@
 const VIEWS = ["dashboard", "training", "nutrition", "progress", "wellbeing", "settings"];
 
 async function reloadAll() {
-  await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery()]);
+  await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery(), reloadRuns()]);
   renderView(state.view);
 }
 
@@ -168,6 +168,7 @@ async function init() {
   state.day = today();
   state.nutritionDate = today();
   await loadSyncAccount();
+  await loadStrava();
   const storedProgram = normalizeProgram(await getSetting("program", null));
   if (storedProgram) {
     /* Programme d'une version précédente : passage au rest-pause et ajout du Reverse butterfly (une seule fois). */
@@ -181,22 +182,30 @@ async function init() {
 
   setupTraining();
   setupSessionMode();
+  setupGenerator();
+  setupRun();
   setupNutrition();
   setupScan();
   setupQuickMeals();
   setupRecipes();
+  setupExpress();
+  setupDayMenu();
   setupProgress();
   setupWellbeing();
   setupDashboard();
   setupCoach();
+  setupCoachSheet();
   setupBattery();
   setupBackup();
   setupSettings();
+  setupDayTargets();
   setupSync();
+  setupCloudBackups();
+  setupStrava();
   setupInstall();
   document.body.addEventListener("click", (e) => { onGlobalClick(e).catch((err) => showToast(humanError(err), "error")); });
 
-  await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery()]);
+  await Promise.all([reloadWorkouts(), reloadMeals(), reloadMeasurements(), reloadWellbeing(), reloadBattery(), reloadRuns()]);
   renderSessionOptions();
   if (restoreWorkoutDraft()) { showToast("Séance en cours restaurée."); resumeSessionMode(); }
   else resetWorkoutForm();
@@ -205,14 +214,19 @@ async function init() {
   resetWellbeingForm();
   resetBatteryForm();
 
-  const requested = new URLSearchParams(location.search).get("view");
+  const query = new URLSearchParams(location.search);
+  /* Retour de la page Strava → Réglages ; fichier GPX partagé → Séance. */
+  const requested = query.has("shared-gpx") ? "training" : query.has("state") && (query.has("code") || query.has("error")) ? "settings" : query.get("view");
   switchView(VIEWS.includes(requested) ? requested : "dashboard");
+  handleStravaRedirect().catch(console.error);
+  checkSharedGpx().catch(console.error);
 
   setupServiceWorker();
   requestPersistence().catch(() => {});
   autoFolderBackup().catch(() => {});
   checkReminder().catch(console.error);
   startSync();
+  maybeStravaImport();
   setInterval(() => { checkDayChange(); checkReminder().catch(console.error); }, 60000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") { checkDayChange(); checkReminder().catch(console.error); if (restTimer.end) tickRestTimer(); if (restTimer.end || sessionModeOpen()) keepScreenOn(true); }

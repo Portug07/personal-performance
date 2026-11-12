@@ -26,7 +26,9 @@ function findExerciseDef(name) {
 
 function validSets(sets) { return (sets || []).filter((s) => s && Number(s.reps) > 0); }
 /* Répétitions totales d'une série (avant l'échec + complément de rest-pause). */
-function totalReps(s) { return (Number(s.reps) || 0) + (Number(s.rpReps) || 0); }
+function totalReps(s) { return (Number(s.reps) || 0) + (Number(s.rpReps) || 0) + (s.rpExtra || []).reduce((a, x) => a + (Number(x) || 0), 0); }
+/* « +7 » ou « +5+3 » : compléments après la (ou les) pause(s) du rest-pause. */
+function fmtRp(s) { return s.rpReps ? [s.rpReps, ...(s.rpExtra || [])].map((x) => `+${fmt(x, 0)}`).join("") : ""; }
 function isRestPause(def) { return !def || def.mode !== "classic"; }
 /* 1RM estimé (formule d'Epley) sur les reps AVANT l'échec : c'est la vraie limite de la série.
    Permet de comparer 70 kg × 10 et 75 kg × 6. */
@@ -44,7 +46,7 @@ function fmtSet(s, bodyweight = false) {
   const hasLoad = s.load !== null && s.load !== undefined && !(bodyweight && !s.load);
   const load = !hasLoad ? "PDC" : (bodyweight ? `PDC+${fmt(s.load, 2)}` : fmt(s.load, 2));
   const reps = s.reps ? fmt(s.reps, 0) : "?";
-  return `${load}\u00a0×\u00a0${reps}${s.rpReps ? `+${fmt(s.rpReps, 0)}` : ""}`;
+  return `${load}\u00a0×\u00a0${reps}${fmtRp(s)}`;
 }
 function sortWorkouts(list) {
   return list.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
@@ -209,21 +211,29 @@ function renderSessionOptions() {
 }
 
 /* Charges proposées : celles de ta dernière séance sur cet exercice, sinon les charges de départ du programme. */
+/* Progression automatique : si le seuil a été atteint la dernière fois, les charges arrivent déjà augmentées
+   (sets.autoIncrement = kg ajoutés ; le bouton « Garder les charges d'avant » annule). */
 function initialSets(def, name, count) {
   const last = exerciseHistory(name, { excludeId: state.editing.workout, beforeOrOn: workoutForm().elements.date.value })[0];
+  const advice = progressionAdvice(def, last);
+  const inc = advice && advice.kind === "up" && !exerciseIsBodyweight(name) ? advice.increment : 0;
   const sets = [];
+  let raised = false;
   for (let i = 0; i < count; i++) {
     let load = null;
     if (last) load = (last.sets[i] || last.sets[last.sets.length - 1]).load;
     else if (def && def.loads && def.loads.length) load = def.loads[i] ?? def.loads[def.loads.length - 1];
+    if (inc && last && load !== null && load !== undefined) { load = round(Number(load) + inc, 2); raised = true; }
     sets.push({ load: load ?? null, reps: null, rpReps: null });
   }
+  sets.autoIncrement = raised ? inc : 0;
   return sets;
 }
 
 function blockHTML(ex, fixedName) {
   const bw = ex.bodyweight ?? exerciseIsBodyweight(ex.name);
-  return `<div class="exercise-block ${bw ? "is-bw" : ""}" data-exercise-id="${esc(ex.exerciseId || "")}" ${ex.bwManual ? 'data-bw-manual="1"' : ""}>
+  const autoInc = ex.autoInc ?? (ex.sets && ex.sets.autoIncrement) ?? 0;
+  return `<div class="exercise-block ${bw ? "is-bw" : ""}" data-exercise-id="${esc(ex.exerciseId || "")}" ${ex.bwManual ? 'data-bw-manual="1"' : ""} ${autoInc ? `data-auto-inc="${esc(String(autoInc))}"` : ""}>
     <div class="exercise-head">
       <input class="exercise-name" list="exercise-names" value="${esc(ex.name)}" placeholder="Nom de l'exercice" aria-label="Nom de l'exercice" ${fixedName ? "readonly" : ""} maxlength="80">
       <button type="button" class="link-button danger-text" data-action="remove-exercise">Retirer</button>
@@ -238,6 +248,7 @@ function blockHTML(ex, fixedName) {
       <button type="button" class="chip-button" data-action="add-set">+ Série</button>
       <button type="button" class="chip-button" data-action="remove-set">− Série</button>
       <span class="exercise-actions-sep"></span>
+      <button type="button" class="chip-button" data-action="replace-exercise">Remplacer</button>
       <button type="button" class="chip-button timer-chip" data-action="timer-rp">Pause RP</button>
       <button type="button" class="chip-button timer-chip" data-action="timer-rest">Repos</button>
     </div>
@@ -248,6 +259,9 @@ function setRowHTML(s, i) {
   const load = s.load === null || s.load === undefined ? "" : String(s.load).replace(".", ",");
   const reps = s.reps === null || s.reps === undefined ? "" : String(s.reps);
   const rp = s.rpReps === null || s.rpReps === undefined ? "" : String(s.rpReps);
+  const ex = Array.isArray(s.rpExtra) ? s.rpExtra : [];
+  const rp2 = ex[0] === null || ex[0] === undefined ? "" : String(ex[0]);
+  const rp3 = ex[1] === null || ex[1] === undefined ? "" : String(ex[1]);
   return `<div class="set-row">
     <span class="set-num">S${i + 1}</span>
     <label class="set-field set-load"><input data-field="load" inputmode="decimal" autocomplete="off" value="${esc(load)}" aria-label="Série ${i + 1}, charge en kg (lest au poids du corps)"><span class="unit-kg">kg</span><span class="unit-bw">lest</span></label>
@@ -256,7 +270,24 @@ function setRowHTML(s, i) {
     <span class="set-x">+</span>
     <label class="set-field set-rp"><input data-field="rp" inputmode="numeric" autocomplete="off" value="${esc(rp)}" aria-label="Série ${i + 1}, complément après la pause (rest-pause)"><span>RP</span></label>
     <span class="set-prev"></span>
+    <div class="set-more" hidden>
+      <span class="set-more-label">Pauses suivantes</span>
+      <label class="set-field set-rp set-rp2" hidden><input data-field="rp2" inputmode="numeric" autocomplete="off" value="${esc(rp2)}" aria-label="Série ${i + 1}, complément après la 2e pause"><span>RP2</span></label>
+      <label class="set-field set-rp set-rp3" hidden><input data-field="rp3" inputmode="numeric" autocomplete="off" value="${esc(rp3)}" aria-label="Série ${i + 1}, complément après la 3e pause"><span>RP3</span></label>
+      <button type="button" class="link-button set-add-rp" data-action="add-rp">+ pause RP</button>
+    </div>
   </div>`;
+}
+/* Ligne « pauses suivantes » : visible dès que le 1er complément est noté ; RP2 puis RP3 sur demande. */
+function refreshSetMore(row) {
+  const val = (f) => $(`[data-field="${f}"]`, row).value.trim() !== "";
+  const open = Number(row.dataset.rpOpen) || 0;
+  const show2 = val("rp2") || val("rp3") || open >= 2;
+  const show3 = val("rp3") || open >= 3;
+  $(".set-rp2", row).hidden = !show2;
+  $(".set-rp3", row).hidden = !show3;
+  $(".set-more", row).hidden = !(val("rp") || show2);
+  $(".set-add-rp", row).hidden = show3 || (show2 && !val("rp2"));
 }
 /* Mode poids du corps d'un exercice : case de charge = lest facultatif, « PDC » en gris. */
 function applyBwMode(block) {
@@ -278,6 +309,8 @@ function renumberSets(block) {
     $('[data-field="load"]', row).setAttribute("aria-label", `Série ${i + 1}, charge en kg`);
     $('[data-field="reps"]', row).setAttribute("aria-label", `Série ${i + 1}, répétitions avant l'échec`);
     $('[data-field="rp"]', row).setAttribute("aria-label", `Série ${i + 1}, complément après la pause (rest-pause)`);
+    $('[data-field="rp2"]', row).setAttribute("aria-label", `Série ${i + 1}, complément après la 2e pause`);
+    $('[data-field="rp3"]', row).setAttribute("aria-label", `Série ${i + 1}, complément après la 3e pause`);
   });
 }
 
@@ -286,7 +319,11 @@ function renderBlockMeta(block) {
   const name = $(".exercise-name", block).value.trim();
   const meta = $(".exercise-meta", block);
   const rows = $$(".set-row", block);
-  rows.forEach((r) => { $(".set-prev", r).textContent = ""; $('[data-field="reps"]', r).placeholder = "—"; $('[data-field="rp"]', r).placeholder = "—"; });
+  rows.forEach((r) => {
+    $(".set-prev", r).textContent = ""; $('[data-field="reps"]', r).placeholder = "—";
+    ["rp", "rp2", "rp3"].forEach((f) => { $(`[data-field="${f}"]`, r).placeholder = "—"; });
+    refreshSetMore(r);
+  });
   if (!name) { meta.innerHTML = ""; return; }
   const opts = { excludeId: state.editing.workout, beforeOrOn: workoutForm().elements.date.value };
   const last = exerciseHistory(name, opts)[0];
@@ -303,6 +340,7 @@ function renderBlockMeta(block) {
       $(".set-prev", r).textContent = `préc. ${fmtSet(s, bw)}`;
       $('[data-field="reps"]', r).placeholder = String(s.reps);
       if (s.rpReps) $('[data-field="rp"]', r).placeholder = String(s.rpReps);
+      (s.rpExtra || []).forEach((x, k) => { $(`[data-field="rp${k + 2}"]`, r).placeholder = String(x); });
     }
   });
   const advice = progressionAdvice(def, last);
@@ -312,7 +350,21 @@ function renderBlockMeta(block) {
       : `<div><span class="muted">Record :</span> ${esc(fmtSet(record.set, bw))} <span class="muted">(1RM estimé ${esc(fmt(e1rm(record.set), 1))} kg, ${esc(fmtShortDate(record.date))}) · charge max ${esc(fmt(record.maxLoad, 2))} kg</span></div>`;
   meta.innerHTML = `<div><span class="muted">Dernière fois (${esc(fmtShortDate(last.date))}) :</span> ${esc(last.sets.map((st) => fmtSet(st, bw)).join(" · "))}</div>
     ${recordHTML}
-    ${advice ? `<div class="advice advice-${advice.kind}">${esc(advice.text)}${advice.kind === "up" ? ` <button type="button" class="chip-button" data-action="apply-increment" data-increment="${advice.increment}">Appliquer +${esc(fmt(advice.increment, 2))} kg</button>` : ""}</div>` : ""}`;
+    ${adviceHTML(block, advice)}
+    ${plateauHTML(name)}`;
+}
+function adviceHTML(block, advice) {
+  if (!advice) return "";
+  const auto = Number(block.dataset.autoInc) || 0;
+  if (advice.kind === "up" && auto) {
+    return `<div class="advice advice-up">Seuil atteint la dernière fois : charges déjà augmentées de +${esc(fmt(auto, 2))} kg. <button type="button" class="chip-button" data-action="undo-increment">Garder les charges d'avant</button></div>`;
+  }
+  return `<div class="advice advice-${advice.kind}">${esc(advice.text)}${advice.kind === "up" ? ` <button type="button" class="chip-button" data-action="apply-increment" data-increment="${advice.increment}">Appliquer +${esc(fmt(advice.increment, 2))} kg</button>` : ""}</div>`;
+}
+function plateauHTML(name) {
+  const p = plateauInfo(name);
+  if (!p) return "";
+  return `<div class="advice advice-plateau">Pas de progrès depuis ${p.sessions} séances. Pistes : changer de plage de reps, faire une semaine plus légère, ou remplacer l'exercice. <button type="button" class="chip-button" data-action="replace-exercise">Remplacer</button></div>`;
 }
 
 function renderEditor(exercises, { fixedNames = false } = {}) {
@@ -336,13 +388,22 @@ function readEditor() {
       const load = parseNumber($('[data-field="load"]', row).value);
       const reps = parseNumber($('[data-field="reps"]', row).value);
       const rp = parseNumber($('[data-field="rp"]', row).value);
+      const extra = ["rp2", "rp3"].map((f) => parseNumber($(`[data-field="${f}"]`, row).value));
       const where = `${name || "Exercice sans nom"}, série ${i + 1}`;
       if (Number.isNaN(load) || (load !== null && (load < 0 || load > 1000))) throw new UserError(`${where} : charge invalide.`);
       if (Number.isNaN(reps) || (reps !== null && (reps < 0 || reps > 1000 || !Number.isInteger(reps)))) throw new UserError(`${where} : nombre de répétitions invalide.`);
       if (Number.isNaN(rp) || (rp !== null && (rp < 0 || rp > 1000 || !Number.isInteger(rp)))) throw new UserError(`${where} : complément de rest-pause invalide.`);
       if (rp && !reps) throw new UserError(`${where} : indique d'abord les reps avant l'échec, puis le complément (ex. 8 + 7).`);
+      extra.forEach((x, k) => {
+        if (Number.isNaN(x) || (x !== null && (x < 0 || x > 1000 || !Number.isInteger(x)))) throw new UserError(`${where} : complément RP${k + 2} invalide.`);
+      });
+      if ((extra[0] && !rp) || (extra[1] && !extra[0])) throw new UserError(`${where} : remplis les compléments dans l'ordre (RP, puis RP2, puis RP3).`);
       const set = { load: load === null ? null : round(load, 2), reps };
-      if (rp) { set.rpReps = rp; set.rpPause = def ? def.rpPause : RP_DEFAULTS.rpPause; }
+      if (rp) {
+        set.rpReps = rp; set.rpPause = rpPauseFor(name);
+        const more = extra.filter((x) => x > 0);
+        if (more.length) set.rpExtra = more;
+      }
       return set;
     });
     const out = { exerciseId: block.dataset.exerciseId || null, name, sets };
@@ -363,13 +424,14 @@ function saveWorkoutDraft() {
     try {
       const form = workoutForm();
       localSet(WORKOUT_DRAFT_KEY, {
-        savedAt: Date.now(), editId: state.editing.workout, date: form.elements.date.value, session: form.elements.session.value,
+        savedAt: Date.now(), editId: state.editing.workout, date: form.elements.date.value, session: form.elements.session.value, generated: form.dataset.generated || "",
         duration: form.elements.duration.value, cardio: form.elements.cardio.value, notes: form.elements.notes.value,
         extra: Object.fromEntries(WORKOUT_EXTRA_FIELDS.map((k) => [k, form.elements[k].value])),
         exercises: $$(".exercise-block", editorEl()).map((b) => ({
           exerciseId: b.dataset.exerciseId || null, name: $(".exercise-name", b).value, fixed: $(".exercise-name", b).readOnly,
-          bw: b.classList.contains("is-bw"), bwManual: b.dataset.bwManual === "1",
-          sets: $$(".set-row", b).map((r) => ({ load: $('[data-field="load"]', r).value, reps: $('[data-field="reps"]', r).value, rpReps: $('[data-field="rp"]', r).value }))
+          bw: b.classList.contains("is-bw"), bwManual: b.dataset.bwManual === "1", autoInc: Number(b.dataset.autoInc) || 0,
+          sets: $$(".set-row", b).map((r) => ({ load: $('[data-field="load"]', r).value, reps: $('[data-field="reps"]', r).value, rpReps: $('[data-field="rp"]', r).value,
+            rpExtra: [$('[data-field="rp2"]', r).value, $('[data-field="rp3"]', r).value] }))
         }))
       });
     } catch (err) { console.warn("Brouillon non enregistré", err); }
@@ -388,9 +450,10 @@ function restoreWorkoutDraft() {
   form.elements.notes.value = draft.notes || "";
   WORKOUT_EXTRA_FIELDS.forEach((k) => { form.elements[k].value = (draft.extra && draft.extra[k]) || ""; });
   form.elements.session.dataset.previous = form.elements.session.value;
+  if (draft.generated) form.dataset.generated = draft.generated; else delete form.dataset.generated;
   editorEl().innerHTML = draft.exercises.map((ex) => blockHTML({
-    exerciseId: ex.exerciseId, name: ex.name || "", bodyweight: typeof ex.bw === "boolean" ? ex.bw : undefined, bwManual: ex.bwManual,
-    sets: (ex.sets || []).map((s) => ({ load: s.load, reps: s.reps, rpReps: s.rpReps }))
+    exerciseId: ex.exerciseId, name: ex.name || "", bodyweight: typeof ex.bw === "boolean" ? ex.bw : undefined, bwManual: ex.bwManual, autoInc: ex.autoInc || 0,
+    sets: (ex.sets || []).map((s) => ({ load: s.load, reps: s.reps, rpReps: s.rpReps, rpExtra: s.rpExtra }))
   }, ex.fixed)).join("");
   $$(".exercise-block", editorEl()).forEach((b) => { applyBwMode(b); renderBlockMeta(b); });
   updateWorkoutFormMode();
@@ -408,6 +471,7 @@ function updateWorkoutFormMode() {
 function resetWorkoutForm() {
   const form = workoutForm();
   state.editing.workout = null;
+  delete form.dataset.generated;
   clearWorkoutDraft();
   form.reset();
   form.elements.date.value = today();
@@ -467,7 +531,7 @@ async function onWorkoutSubmit(event) {
     const record = {
       id: existing ? existing.id : uid(), type: "workout", date,
       sessionId: session ? session.id : FREE_SESSION_ID,
-      sessionType: session ? session.name : (existing && !findSession(existing.sessionId) ? existing.sessionType : "Séance libre"),
+      sessionType: session ? session.name : (existing && !findSession(existing.sessionId) ? existing.sessionType : (form.dataset.generated || "Séance libre")),
       duration: readNumber(form, "duration", { min: 0, max: 1440, decimals: 0, label: "Durée", integer: true }),
       cardio: readText(form, "cardio", 200), notes: readText(form, "notes", 2000), exercises,
       createdAt: existing ? existing.createdAt : undefined
@@ -541,6 +605,7 @@ function renderWorkoutHistory() {
 function renderTraining() {
   safeRender("programme", renderSessionOptions);
   safeRender("historique des séances", renderWorkoutHistory);
+  safeRender("course", renderRunPanel);
   updateWorkoutFormMode();
 }
 
@@ -619,7 +684,9 @@ function renderBodyweightProgress(container, history, record) {
    allumé pendant le décompte quand le téléphone le permet. */
 
 const REST_KEY = "pp-rest-timer";
-const restTimer = { end: 0, total: 0, label: "Repos", interval: null, wakeLock: null };
+const RP_PAUSES_KEY = "pp-rp-pauses";      // pause RP réglée avec − / + : retenue par exercice (sur cet appareil)
+const REST_LOCKED_KEY = "pp-rest-locked";  // option « sonner aussi écran verrouillé »
+const restTimer = { end: 0, total: 0, label: "Repos", exercise: "", interval: null, wakeLock: null, nodes: [], keep: null };
 let restAudio = null;
 function fmtClock(seconds) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
 /* Le son doit être « débloqué » par un appui (iPhone) : on prépare le lecteur au lancement du minuteur. */
@@ -642,28 +709,85 @@ async function keepScreenOn(on) {
     }
   } catch { /* écran : réglage du téléphone, sans conséquence */ }
 }
-function startRestTimer(seconds, label = "Repos") {
+/* Bips de fin programmés d'avance sur l'horloge audio : ils sonnent à l'heure même si le téléphone
+   ralentit l'app (écran noir, verrouillé avec l'option « son continu »). */
+function scheduleRestBeeps() {
+  cancelRestBeeps();
+  if (!restAudio || !restTimer.end) return;
+  const at = restAudio.currentTime + Math.max(0, (restTimer.end - Date.now()) / 1000);
+  for (let i = 0; i < 3; i++) {
+    const osc = restAudio.createOscillator();
+    const gain = restAudio.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.25;
+    osc.connect(gain); gain.connect(restAudio.destination);
+    osc.start(at + i * 0.45); osc.stop(at + i * 0.45 + 0.3);
+    restTimer.nodes.push(osc);
+  }
+}
+function cancelRestBeeps() {
+  restTimer.nodes.forEach((n) => { try { n.stop(); } catch { /* déjà fini */ } });
+  restTimer.nodes = [];
+}
+/* Option « sonner aussi écran verrouillé » : un son continu presque inaudible garde l'app éveillée
+   pendant le décompte (selon le téléphone, la musique peut se mettre en pause). */
+function restKeepAlive(on) {
+  try {
+    if (on && !restTimer.keep && restAudio) {
+      const osc = restAudio.createOscillator();
+      const g = restAudio.createGain();
+      osc.frequency.value = 150;
+      g.gain.value = 0.002;
+      osc.connect(g); g.connect(restAudio.destination);
+      osc.start();
+      restTimer.keep = osc;
+    } else if (!on && restTimer.keep) {
+      restTimer.keep.stop();
+      restTimer.keep = null;
+    }
+  } catch { restTimer.keep = null; }
+}
+function rememberedRpPause(name) {
+  const v = (localGet(RP_PAUSES_KEY, {}) || {})[fold(name || "")];
+  return Number.isFinite(v) && v >= 5 && v <= 600 ? v : null;
+}
+function startRestTimer(seconds, label = "Repos", exercise = "") {
   const s = Math.max(5, Math.min(900, Math.round(Number(seconds) || 90)));
   unlockRestAudio();
   restTimer.end = Date.now() + s * 1000;
   restTimer.total = s;
   restTimer.label = label;
-  localSet(REST_KEY, { end: restTimer.end, total: s, label });
+  restTimer.exercise = exercise;
+  localSet(REST_KEY, { end: restTimer.end, total: s, label, exercise });
   clearInterval(restTimer.interval);
   restTimer.interval = setInterval(tickRestTimer, 250);
   keepScreenOn(true);
+  scheduleRestBeeps();
+  restKeepAlive(localGet(REST_LOCKED_KEY, false) === true);
   tickRestTimer();
 }
+/* − / + : ajuste le décompte en cours (5 s minimum). Une pause RP ajustée est retenue pour cet exercice. */
 function addRestTime(seconds) {
   if (!restTimer.end) return;
-  restTimer.end += seconds * 1000;
-  restTimer.total += seconds;
-  localSet(REST_KEY, { end: restTimer.end, total: restTimer.total, label: restTimer.label });
+  const total = Math.max(5, restTimer.total + seconds);
+  const delta = total - restTimer.total;
+  restTimer.end += delta * 1000;
+  restTimer.total = total;
+  localSet(REST_KEY, { end: restTimer.end, total, label: restTimer.label, exercise: restTimer.exercise });
+  if (restTimer.label === "Pause RP" && restTimer.exercise) {
+    const map = localGet(RP_PAUSES_KEY, {}) || {};
+    map[fold(restTimer.exercise)] = total;
+    localSet(RP_PAUSES_KEY, map);
+  }
+  scheduleRestBeeps();
   tickRestTimer();
+  if (sessionModeOpen()) renderSessionMode();
 }
 function stopRestTimer() {
   clearInterval(restTimer.interval);
   restTimer.end = 0;
+  cancelRestBeeps();
+  restKeepAlive(false);
   localRemove(REST_KEY);
   document.getElementById("rest-pill").hidden = true;
   renderRestDisplays(null);
@@ -674,7 +798,7 @@ function resumeRestTimer() {
   const saved = localGet(REST_KEY);
   if (!saved || !saved.end) return;
   if (saved.end <= Date.now()) { localRemove(REST_KEY); return; }
-  restTimer.end = saved.end; restTimer.total = saved.total || 90; restTimer.label = saved.label || "Repos";
+  restTimer.end = saved.end; restTimer.total = saved.total || 90; restTimer.label = saved.label || "Repos"; restTimer.exercise = saved.exercise || "";
   clearInterval(restTimer.interval);
   restTimer.interval = setInterval(tickRestTimer, 250);
   tickRestTimer();
@@ -692,6 +816,7 @@ function renderRestDisplays(left) {
   $("#rest-pill-label").textContent = restTimer.label;
   $("#rest-pill-time").textContent = fmtClock(left);
   $("#rest-pill-bar").style.width = `${pct}%`;
+  if (typeof smDimRender === "function") smDimRender();
   if (big) {
     big.hidden = false;
     $("#sm-timer-label").textContent = restTimer.label;
@@ -704,9 +829,13 @@ function tickRestTimer() {
   const left = Math.ceil((restTimer.end - Date.now()) / 1000);
   if (left <= 0) {
     const label = restTimer.label;
+    /* Bips déjà programmés sur l'horloge audio : on ne les rejoue pas. */
+    const scheduled = restTimer.nodes.length && restAudio && restAudio.state === "running";
+    restTimer.nodes = [];
     stopRestTimer();
     if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
-    beep(3);
+    if (!scheduled) beep(3);
+    if (typeof smWake === "function") smWake();
     showToast(label === "Pause RP" ? "Pause terminée : complément de rest-pause !" : "Repos terminé : série suivante !");
     return;
   }
@@ -728,8 +857,10 @@ function beep(times = 1) {
   } catch { /* son indisponible : la vibration suffit */ }
 }
 function restDuration() { return localGet("pp-rest-seconds", 90); }
-/* Pause du rest-pause d'un exercice : réglage du programme, sinon 20 s. */
+/* Pause du rest-pause d'un exercice : celle que tu as réglée avec − / + la dernière fois, sinon le programme, sinon 20 s. */
 function rpPauseFor(name) {
+  const mine = rememberedRpPause(name);
+  if (mine) return mine;
   const def = findExerciseDef(name);
   return def ? def.rpPause : RP_DEFAULTS.rpPause;
 }
@@ -740,12 +871,16 @@ function setupTraining() {
   const form = workoutForm();
   form.addEventListener("submit", onWorkoutSubmit);
   form.addEventListener("input", saveWorkoutDraft);
+  editorEl().addEventListener("input", (e) => {
+    if (/^rp/.test(e.target.dataset.field || "")) refreshSetMore(e.target.closest(".set-row"));
+  });
   form.elements.session.addEventListener("change", (e) => {
     const previous = e.target.dataset.previous;
     if (editorHasReps() && !confirm("Changer de séance efface les séries déjà saisies. Continuer ?")) {
       if (previous) e.target.value = previous;
       return;
     }
+    delete workoutForm().dataset.generated;
     renderTemplate(e.target.value);
     saveWorkoutDraft();
   });
@@ -762,12 +897,13 @@ function setupTraining() {
      complément saisi (ou exercice classique) → repos entre séries. */
   editorEl().addEventListener("change", (e) => {
     const field = e.target.dataset.field;
-    if (!localGet("pp-rest-auto", false) || !e.target.value.trim() || (field !== "reps" && field !== "rp")) return;
+    if (!localGet("pp-rest-auto", false) || !e.target.value.trim()) return;
     const block = e.target.closest(".exercise-block");
     const name = $(".exercise-name", block).value;
     const row = e.target.closest(".set-row");
+    if (field !== "reps" && field !== "rp" && field !== "rp2" && field !== "rp3") return;
     const rpEmpty = !$('[data-field="rp"]', row).value.trim();
-    if (field === "reps" && rpEmpty && isRestPause(findExerciseDef(name))) startRestTimer(rpPauseFor(name), "Pause RP");
+    if (field === "reps" && rpEmpty && isRestPause(findExerciseDef(name))) startRestTimer(rpPauseFor(name), "Pause RP", name);
     else startRestTimer(restDuration(), "Repos");
   });
   editorEl().addEventListener("click", (e) => {
@@ -784,12 +920,30 @@ function setupTraining() {
       const rows = $$(".set-row", block);
       if (rows.length > 1) rows[rows.length - 1].remove();
     } else if (btn.dataset.action === "remove-exercise") {
-      if (!$$('[data-field="reps"], [data-field="rp"]', block).some((i) => i.value.trim()) || confirm("Retirer cet exercice et ses séries ?")) block.remove();
+      if (!$$('[data-field="reps"], [data-field="rp"], [data-field="rp2"]', block).some((i) => i.value.trim()) || confirm("Retirer cet exercice et ses séries ?")) block.remove();
+    } else if (btn.dataset.action === "add-rp") {
+      const row = btn.closest(".set-row");
+      row.dataset.rpOpen = String(Math.min(3, Math.max(Number(row.dataset.rpOpen) || 1, $('[data-field="rp2"]', row).value.trim() ? 2 : 1) + 1));
+      refreshSetMore(row);
+      $(`[data-field="rp${row.dataset.rpOpen}"]`, row).focus();
+      return;
+    } else if (btn.dataset.action === "undo-increment") {
+      const inc = Number(block.dataset.autoInc) || 0;
+      $$('[data-field="load"]', block).forEach((input) => {
+        const v = parseNumber(input.value);
+        if (v !== null && !Number.isNaN(v)) input.value = String(round(Math.max(0, v - inc), 2)).replace(".", ",");
+      });
+      delete block.dataset.autoInc;
+      renderBlockMeta(block);
+      showToast(`Charges d'avant remises (−${fmt(inc, 2)} kg).`);
+    } else if (btn.dataset.action === "replace-exercise") {
+      openReplaceDialog(block);
+      return;
     } else if (btn.dataset.action === "toggle-bw") {
       setBodyweight(block, !block.classList.contains("is-bw"), { manual: true });
       renderBlockMeta(block);
     } else if (btn.dataset.action === "timer-rp") {
-      startRestTimer(rpPauseFor($(".exercise-name", block).value), "Pause RP");
+      startRestTimer(rpPauseFor($(".exercise-name", block).value), "Pause RP", $(".exercise-name", block).value);
       return;
     } else if (btn.dataset.action === "timer-rest") {
       startRestTimer(restDuration(), "Repos");
@@ -822,7 +976,11 @@ function setupTraining() {
   /* Minuteur */
   $$("[data-rest]").forEach((b) => b.addEventListener("click", () => startRestTimer(Number(b.dataset.rest), b.dataset.restLabel || "Repos")));
   document.getElementById("rest-stop").addEventListener("click", stopRestTimer);
-  document.getElementById("rest-more").addEventListener("click", () => addRestTime(15));
+  document.getElementById("rest-more").addEventListener("click", () => addRestTime(5));
+  document.getElementById("rest-less").addEventListener("click", () => addRestTime(-5));
+  const locked = document.getElementById("rest-locked");
+  locked.checked = localGet(REST_LOCKED_KEY, false) === true;
+  locked.addEventListener("change", () => { localSet(REST_LOCKED_KEY, locked.checked); if (restTimer.end) restKeepAlive(locked.checked); });
   resumeRestTimer();
   const auto = document.getElementById("rest-auto");
   auto.checked = localGet("pp-rest-auto", false);

@@ -10,7 +10,8 @@ function renderDashboardCards() {
   const t = today();
   const todayMeals = state.recentMeals.filter((m) => m.date === t);
   const totals = mealTotals(todayMeals);
-  const g = state.targets;
+  const g = targetsFor(t);
+  document.getElementById("dash-daytype").innerHTML = dayTypeBarHTML(t);
   const ws = weightStats();
   const weekStart = mondayOf(t);
   const weekWorkouts = state.workouts.filter((w) => w.date >= weekStart && w.date <= t);
@@ -59,7 +60,8 @@ function renderRecentActivity() {
     ...state.workouts.map((r) => ({ r, label: `Séance ${r.sessionType}`, detail: plural((r.exercises || []).length, "exercice") })),
     ...state.recentMeals.map((r) => ({ r, label: `${r.kind} · ${r.name}`, detail: `${fmt(r.kcal, 0)} kcal` })),
     ...state.measurements.map((r) => ({ r, label: "Mesures", detail: r.weight ? `${fmt(r.weight, 1)} kg` : "mensurations" })),
-    ...state.wellbeing.map((r) => ({ r, label: "Check-in récupération", detail: r.sleep ? `sommeil ${fmt(r.sleep, 2)} h` : "" }))
+    ...state.wellbeing.map((r) => ({ r, label: "Check-in récupération", detail: r.sleep ? `sommeil ${fmt(r.sleep, 2)} h` : "" })),
+    ...(state.runs || []).map((r) => ({ r, label: `Course · ${runTitle(r)}`, detail: runSummaryText(r) }))
   ].sort((a, b) => (b.r.updatedAt || 0) - (a.r.updatedAt || 0)).slice(0, 5);
   document.getElementById("recent-activity").innerHTML = items.length
     ? items.map((i) => `<div class="activity-item"><div><b>${esc(i.label)}</b><small>${esc(fmtDate(i.r.date))}</small></div><small>${esc(i.detail)}</small></div>`).join("")
@@ -100,9 +102,16 @@ function periodData(days) {
   };
 }
 
+/* Objectif moyen sur les jours renseignés (il change selon le type de journée). */
+function averageTargets(dates) {
+  if (!dayTargetsEnabled() || !dates.length) return state.targets;
+  const list = dates.map(targetsFor);
+  const avg = (k) => (list.every((x) => x[k]) ? list.reduce((a, x) => a + x[k], 0) / list.length : null);
+  return { ...state.targets, kcal: avg("kcal"), protein: avg("protein"), carbs: avg("carbs"), fat: avg("fat") };
+}
 function renderReview() {
   const p = periodData(reviewDays);
-  const g = state.targets;
+  const g = averageTargets(p.dayTotals.map((d) => d.date));
   const rows = [
     ["Calories (moyenne)", p.avg.kcal === null ? "—" : `${fmt(p.avg.kcal, 0)} kcal${g.kcal ? ` / ${fmt(g.kcal, 0)}` : ""}`, `${p.dayTotals.length}/${p.days} jours renseignés`],
     ["Protéines (moyenne)", p.avg.protein === null ? "—" : `${fmt(p.avg.protein, 0)} g${g.protein ? ` / ${fmt(g.protein, 0)}` : ""}`, ""],
@@ -121,7 +130,9 @@ function buildClaudeSummary(days = reviewDays) {
   const g = state.targets;
   const L = [];
   L.push(`# Bilan Personal Performance du ${fmtDate(p.from)} au ${fmtDate(p.to)} (${days} jours)`);
-  const goals = [g.kcal && `${fmt(g.kcal, 0)} kcal/j`, g.protein && `${fmt(g.protein, 0)} g de protéines/j`, g.carbs && `${fmt(g.carbs, 0)} g de glucides/j`, g.fat && `${fmt(g.fat, 0)} g de lipides/j`, g.weight && `poids cible ${fmt(g.weight, 1)} kg`].filter(Boolean);
+  if (dayTargetsEnabled()) L.push(`Objectifs selon la journée : ${DAY_TYPES.filter(([k]) => g.days[k]).map(([k, label]) => `${label} ${dayTargetsText(g.days[k])}`).join(" ; ")}`);
+  const one = !dayTargetsEnabled();
+  const goals = [one && g.kcal && `${fmt(g.kcal, 0)} kcal/j`, one && g.protein && `${fmt(g.protein, 0)} g de protéines/j`, one && g.carbs && `${fmt(g.carbs, 0)} g de glucides/j`, one && g.fat && `${fmt(g.fat, 0)} g de lipides/j`, g.weight && `poids cible ${fmt(g.weight, 1)} kg`].filter(Boolean);
   L.push(`Objectifs : ${goals.length ? goals.join(", ") : "non définis"}`);
   L.push("", `## Nutrition (${p.dayTotals.length}/${days} jours renseignés)`);
   if (p.dayTotals.length) {

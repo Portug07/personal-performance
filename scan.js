@@ -355,6 +355,26 @@ function applyScannedProduct(product) {
   applyPer100();
   updatePer100Hint();
 }
+/* Dernière fois que tu as noté ce produit (même code-barres, ou même nom), avec une portion en grammes. */
+function knownScannedMeal(product) {
+  const key = fold(product.name);
+  return state.recentMeals.slice().sort(newestFirst)
+    .find((m) => m.grams > 0 && (m.barcode === product.code || fold(m.name) === key)) || null;
+}
+async function quickAddScanned(product, known) {
+  const form = mealForm();
+  const g = known.grams, f = g / 100, p = product.per100;
+  const item = {
+    name: product.name, grams: g, quantity: known.quantity, per100: p, nutriscore: product.nutriscore, nova: product.nova, barcode: product.code,
+    kcal: p.kcal * f, protein: (p.protein || 0) * f, carbs: (p.carbs || 0) * f, fat: (p.fat || 0) * f, fiber: (p.fiber || 0) * f
+  };
+  const kind = form.elements.kind.value || defaultMealKind();
+  const date = isValidISO(form.elements.date.value) ? form.elements.date.value : state.nutritionDate;
+  const created = await addItemsToDay([item], kind, date);
+  document.getElementById("scan-dialog").close();
+  showToast(`Déjà connu : ${product.name}, ${fmt(g, 0)} g (${fmt(item.kcal, 0)} kcal) ajouté en ${kind.toLowerCase()}.`, "ok",
+    { label: "Annuler", run: () => undoQuickAdd(created) });
+}
 async function lookupBarcode(raw) {
   const code = normalizeBarcode(raw);
   if (!code) { setScanStatus("Code incomplet : un code-barres compte 8 ou 13 chiffres.", "error"); return; }
@@ -364,6 +384,12 @@ async function lookupBarcode(raw) {
     const product = await fetchFoodByBarcode(code);
     if (!product) {
       setScanStatus(`Produit ${code} absent d'Open Food Facts : ferme cette fenêtre et saisis les valeurs de l'étiquette.`, "error");
+      return;
+    }
+    /* Scan express : produit déjà mangé → ajouté directement avec ta portion habituelle. */
+    const known = !scanOnProduct && product.per100 ? knownScannedMeal(product) : null;
+    if (known) {
+      await quickAddScanned(product, known);
       return;
     }
     applyScannedProduct(product);

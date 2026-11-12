@@ -520,3 +520,131 @@ footer { display: flex; justify-content: space-between; color: #657061; font-siz
 .remaining-text { margin: 0 0 6px; font-size: 16px; }
 .remaining-hint { width: 100%; margin: 4px 0 2px; }
 .remaining-chip { border-color: var(--accent-dark); }
+
+/* ---------- Lot 3.4 : fréquents, portions, cru/cuit, saisie express, trous ---------- */
+.food-chips-label { font-size: 12px; color: var(--muted); align-self: center; }
+.portion-row, .cook-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -4px 0 10px; }
+.portion-row input { width: 64px; text-align: center; }
+.portion-row select { width: auto; min-width: 120px; }
+.portion-label { font-size: 13px; color: var(--muted); font-weight: 700; }
+.portion-row .hint, .cook-row .hint { margin: 0; flex: 1 1 160px; }
+.cook-row .chip-button[aria-pressed="true"] { background: var(--accent); color: #151a12; border-color: var(--accent); font-weight: 800; }
+.express-lines { display: grid; gap: 8px; margin: 12px 0; }
+.express-line { display: grid; grid-template-columns: 1fr 90px auto; gap: 4px 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.express-line.is-missing { border-color: var(--warn); }
+.express-src { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.express-line select, .express-none { grid-column: 1 / 2; }
+.express-grams { display: flex; align-items: center; gap: 4px; }
+.express-grams span { font-size: 13px; color: var(--muted); }
+.express-kcal { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
+.express-line [data-express-remove] { grid-column: 3; grid-row: 2; }
+.gaps-panel { padding: 14px 18px; border-color: var(--warn); }
+.gaps-panel .eyebrow { margin: 0 0 6px; color: var(--warn); }
+.gaps-list { display: grid; gap: 8px; }
+.gap-item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; }
+.gap-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.combo-hint { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; }
+.combo-actions { display: flex; gap: 6px; }
+.express-dialog textarea { min-height: 76px; height: 84px; resize: vertical; }
+.express-dialog .button-row { position: sticky; bottom: -1px; background: var(--panel); padding: 10px 0 4px; margin: 0; }
+.scan-row > button { flex: 1 1 140px; }
+
+/* ---------- Lot 3.5 : générateur, remplacement, plateaux ---------- */
+.gen-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.gen-result { display: grid; gap: 8px; margin: 10px 0; }
+.gen-summary { margin: 0; }
+.gen-item { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.gen-item small { color: var(--text); font-size: 13px; }
+.gen-item small.muted { color: var(--muted); }
+.gen-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.gen-why { color: var(--warn) !important; }
+.gen-cardio { border-style: dashed; }
+.gen-dialog .button-row { position: sticky; bottom: -1px; background: var(--panel); padding: 10px 0 4px; margin: 0; }
+.replace-list { display: grid; gap: 6px; margin: 10px 0; max-height: 50vh; overflow-y: auto; }
+.replace-item { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); }
+.replace-item small { color: var(--muted); }
+.advice-plateau { background: #2a2416; color: var(--warn); }
+.progress-tools { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: flex-end; }
+#coach-program-text { min-height: 120px; }
+
+/* ---------- Lot 3.6 : menu de la journée, copies de sécurité, fiche coach ---------- */
+.menu-open { margin-top: 10px; width: 100%; }
+.gen-dialog .menu-actions { position: static; background: none; padding: 0; margin: 6px 0 0; }
+.menu-total { margin: 0; font-size: 14px; }
+.cloud-backups { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.cloud-backups .eyebrow { margin: 0 0 4px; }
+.backup-list { display: grid; gap: 8px; margin-top: 10px; }
+.backup-item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.backup-item small { display: block; color: var(--muted); font-size: 12px; }
+#coach-sheet-output, #coach-sheet-base { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; min-height: 140px; }
+#coach-sheet-dialog .button-row { position: sticky; bottom: -1px; background: var(--panel); padding: 10px 0 4px; margin: 0; }
+
+/* ---------- Lot 3.7 : course ---------- */
+.run-status { display: grid; gap: 4px; margin-bottom: 10px; }
+.run-status p { margin: 0; }
+.run-step { font-size: 15px; }
+.run-rest { color: var(--warn); }
+.run-box { padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; background: var(--accent-soft); }
+.run-box p { margin: 0 0 8px; }
+.run-scale { display: flex; flex-wrap: wrap; gap: 6px; }
+.run-scale .chip-button { min-width: 40px; }
+.run-launch { display: grid; gap: 8px; margin-bottom: 6px; }
+.run-journal-title { margin: 14px 0 6px; }
+.run-item small { display: block; }
+.strava-steps { list-style: decimal; padding-left: 20px; margin: 0 0 12px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.strava-steps b { color: var(--text); }
+
+/* Écran de course : noir (moins de batterie sur les écrans OLED), textes énormes. */
+.run-timer {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+  background: #000; color: #d8ddd2;
+}
+.run-timer[open] { display: flex; flex-direction: column; }
+.run-timer::backdrop { background: #000; }
+.rt-top { display: flex; justify-content: space-between; gap: 10px; padding: calc(12px + env(safe-area-inset-top)) 16px 8px; font-size: 14px; color: #8a9184; }
+.rt-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 0 16px; }
+.rt-phase { margin: 0; font-size: clamp(44px, 16vw, 110px); font-weight: 900; letter-spacing: 2px; color: #7fb6e8; line-height: 1; }
+.rt-is-run .rt-phase { color: var(--accent); }
+.rt-is-paused .rt-phase { color: var(--warn); }
+.rt-label { margin: 8px 0 0; font-size: 16px; color: #8a9184; }
+.rt-time { margin: 6px 0 14px; font-size: clamp(72px, 30vw, 200px); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; color: #f2f5ee; }
+.rt-bar { width: min(520px, 86vw); height: 8px; border-radius: 8px; background: #1b1f1a; overflow: hidden; }
+.rt-bar span { display: block; height: 100%; width: 0; background: #7fb6e8; }
+.rt-is-run .rt-bar span { background: var(--accent); }
+.rt-next { margin: 14px 0 0; font-size: 18px; color: #9aa193; }
+.rt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+.rt-button { min-height: 60px; border-radius: 14px; border: 1px solid #2b3129; background: #0b0d0b; color: #d8ddd2; font-size: 18px; font-weight: 700; }
+.rt-danger { color: var(--danger); border-color: #4a2b27; }
+.rt-hint { margin: 10px 16px calc(14px + env(safe-area-inset-bottom)); font-size: 12px; color: #6d7468; text-align: center; }
+
+/* ---------- Lot 3.8 ---------- */
+.sm-timer button { padding: 8px 11px; }
+.rest-pill button, #rest-pill-label { white-space: nowrap; }
+.rest-pill button.rest-more { min-width: 44px; }
+@media (max-width: 440px) {
+  .rest-pill { gap: 6px; padding-left: 12px; }
+  .rest-pill button { padding: 8px 10px; }
+  .rest-pill b { min-width: 48px; font-size: 20px; }
+  #rest-pill-label { font-size: 12px; }
+}
+.set-more { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.set-more[hidden] { display: none; }
+.set-more-label { color: var(--faint); font-size: 12px; }
+.set-more .set-field { width: 88px; }
+.set-add-rp { font-size: 13px; padding: 4px 2px; }
+.sm-more-rp { width: 100%; margin: 4px 0 8px; min-height: 48px; }
+.sm-dim { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; color: #5f665a; }
+.sm-dim[hidden] { display: none; }
+.sm-dim-label { font-size: 18px; font-weight: 700; color: #6f7769; }
+.sm-dim-time { font-size: clamp(64px, 26vw, 160px); font-weight: 800; color: #8a9184; font-variant-numeric: tabular-nums; line-height: 1; }
+.sm-dim-next { font-size: 16px; color: #6f7769; }
+.sm-dim small { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 16px; right: 16px; font-size: 12px; color: #474d43; }
+.form-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 560px) { .form-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.day-row { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 10px; margin: 0 0 10px; }
+.day-row legend { padding: 0 4px; font-size: 14px; }
+.day-type-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.day-type-title { font-size: 14px; color: var(--muted); }
+.day-type-title b { color: var(--text); }
+.day-type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-chip.is-active { background: var(--accent); color: #151a12; border-color: var(--accent); }

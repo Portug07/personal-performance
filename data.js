@@ -3,7 +3,7 @@
    Données de départ (programme, aliments) et contrôle des données importées.
    ========================================================================== */
 
-const APP_VERSION = "3.3.0";
+const APP_VERSION = "3.8.0";
 const EXPORT_FORMAT = 3;
 const PROGRAM_SCHEMA = 3;
 /* Réglages synchronisés entre appareils (en plus des entrées). */
@@ -111,6 +111,7 @@ const state = {
   measurements: [],
   wellbeing: [],
   battery: [],               // résultats de la batterie de tests (toutes les 4 semaines)
+  runs: [],                  // courses (version 3.7), de la plus récente à la plus ancienne
   recentMeals: [],           // repas des 90 derniers jours (suggestions, bilans)
   nutritionDate: null,
   dayMeals: [],              // repas du jour affiché dans « Nutrition »
@@ -183,6 +184,9 @@ function cleanSets(sets) {
       out.rpReps = rp;
       const pause = cleanNum(s.rpPause, LIMITS.pause, 0);
       if (pause !== null) out.rpPause = pause;
+      /* Pauses suivantes de la même série (version 3.8) : 8 + 5 + 3 → rpReps 5, rpExtra [3]. */
+      const extra = (Array.isArray(s.rpExtra) ? s.rpExtra : []).slice(0, 2).map((x) => cleanNum(x, LIMITS.reps, 0)).filter((x) => x > 0);
+      if (extra.length) out.rpExtra = extra;
     }
     return out;
   });
@@ -287,6 +291,23 @@ function normalizeRecord(raw) {
         }), photo
       };
     }
+    case "run": {
+      /* Course (version 3.7) : séance du plan chronométrée, saisie à la main, ou importée (Strava, GPX). */
+      const record = assignDefined({
+        ...base, source: ["app", "manuel", "strava", "gpx"].includes(raw.source) ? raw.source : "manuel", completed: raw.completed === true
+      }, {
+        name: cleanText(raw.name, 120), notes: cleanText(raw.notes, 1000),
+        startTime: typeof raw.startTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.startTime) ? raw.startTime : null,
+        durationS: cleanNum(raw.durationS, LIMITS.seconds, 0), runS: cleanNum(raw.runS, LIMITS.seconds, 0),
+        distanceKm: cleanNum(raw.distanceKm, LIMITS.km, 2), planStep: cleanNum(raw.planStep, [1, 50], 0),
+        painDuring: cleanNum(raw.painDuring, LIMITS.scale0, 1), painAfter: cleanNum(raw.painAfter, LIMITS.scale0, 1),
+        painNext: cleanNum(raw.painNext, LIMITS.scale0, 1), effort: cleanNum(raw.effort, LIMITS.scale1, 0),
+        elevationM: cleanNum(raw.elevationM, [0, 20000], 0), avgHr: cleanNum(raw.avgHr, [30, 250], 0),
+        stravaId: typeof raw.stravaId === "string" && /^\d{1,20}$/.test(raw.stravaId) ? raw.stravaId : null,
+        importedFrom: ["strava", "gpx"].includes(raw.importedFrom) ? raw.importedFrom : null
+      });
+      return record.durationS || record.distanceKm ? { record, photo } : null;
+    }
     default:
       return null;
   }
@@ -303,7 +324,8 @@ function cleanMealFields(raw) {
   const grade = String(raw.nutriscore || "").toLowerCase();
   return assignDefined(out, {
     volumeMl: cleanNum(raw.volumeMl, LIMITS.volumeMl, 0), abv: cleanNum(raw.abv, LIMITS.abv, 1),
-    nutriscore: /^[a-e]$/.test(grade) ? grade : null, nova: cleanNum(raw.nova, [1, 4], 0)
+    nutriscore: /^[a-e]$/.test(grade) ? grade : null, nova: cleanNum(raw.nova, [1, 4], 0),
+    barcode: /^\d{8,14}$/.test(String(raw.barcode || "")) ? String(raw.barcode) : null
   });
 }
 
@@ -344,8 +366,23 @@ function upgradeProgram(program) {
 
 function normalizeTargets(raw) {
   const t = raw && typeof raw === "object" ? raw : {};
-  return {
+  const out = {
     kcal: cleanNum(t.kcal, [500, 10000], 0), protein: cleanNum(t.protein, [0, 1000], 0), carbs: cleanNum(t.carbs, [0, 2000], 0),
     fat: cleanNum(t.fat, [0, 1000], 0), fiber: cleanNum(t.fiber, [0, 200], 0), weight: cleanNum(t.weight, LIMITS.weight, 1)
   };
+  /* Version 3.8 : objectifs par type de journée (complet / semi / sans sport) et choix manuels par jour. */
+  const days = {};
+  ["full", "semi", "rest"].forEach((k) => {
+    const d = t.days && t.days[k];
+    if (!d || typeof d !== "object") return;
+    const row = { kcal: cleanNum(d.kcal, [500, 10000], 0), protein: cleanNum(d.protein, [0, 1000], 0), carbs: cleanNum(d.carbs, [0, 2000], 0), fat: cleanNum(d.fat, [0, 1000], 0) };
+    if (row.kcal) days[k] = row;
+  });
+  if (Object.keys(days).length) out.days = days;
+  const overrides = {};
+  Object.entries(t.dayOverrides && typeof t.dayOverrides === "object" ? t.dayOverrides : {}).slice(0, 60).forEach(([date, type]) => {
+    if (isValidISO(date) && ["full", "semi", "rest"].includes(type)) overrides[date] = type;
+  });
+  if (Object.keys(overrides).length) out.dayOverrides = overrides;
+  return out;
 }

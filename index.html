@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Politique de sécurité : seuls les fichiers de l'application peuvent s'exécuter, aucun envoi vers Internet (audit I1). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://world.openfoodfacts.org; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://world.openfoodfacts.org https://www.strava.com; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#111511">
   <meta name="description" content="Suivi personnel de l'entraînement, de la nutrition et de la progression.">
   <title>Personal Performance</title>
@@ -58,6 +58,7 @@
         <button type="button" class="primary-button" id="alert-backup">Sauvegarder maintenant</button>
       </div>
 
+      <div id="dash-daytype"></div>
       <div class="metric-grid" id="dash-cards"></div>
 
       <div class="two-column">
@@ -107,6 +108,10 @@
           <button type="button" class="secondary-button" id="share-period-json" hidden>Partager l'export</button>
         </div>
         <p class="hint">Chaque soir : colle le récap dans la conversation de la semaine du projet « Personal Performance ». En fin de semaine ou de mois : joins l'export JSON à la conversation.</p>
+        <div class="button-row">
+          <button type="button" class="secondary-button" id="coach-sheet-open">Mettre à jour la fiche « État actuel »</button>
+        </div>
+        <p class="hint">Chaque mois : l'app remplit la fiche du projet coach avec tes derniers chiffres (poids, tour de taille, charges, moyennes, genou, batterie). Tu remplaces l'ancienne fiche dans le projet.</p>
       </article>
 
       <article class="panel">
@@ -130,7 +135,8 @@
             <label>Durée (min)<input name="duration" inputmode="numeric" autocomplete="off" placeholder="75"></label>
             <label>Pesée avant séance (kg)<input name="weighIn" inputmode="decimal" autocomplete="off" placeholder="106"></label>
           </div>
-          <button type="button" class="primary-button session-open" id="session-open">Mode séance plein écran</button>
+          <button type="button" class="primary-button session-open" id="gen-open">Génère ma séance</button>
+          <button type="button" class="secondary-button session-open" id="session-open">Mode séance plein écran</button>
           <p class="hint">Un exercice à la fois, gros boutons, minuteur intégré. Tout ce que tu y notes arrive dans ce formulaire.</p>
           <p class="eyebrow">VÉLO D'ÉCHAUFFEMENT</p>
           <div class="form-grid three">
@@ -168,8 +174,35 @@
           <label class="toggle-row"><input type="checkbox" id="rest-auto"> Lancer tout seul : pause RP après les reps avant l'échec, puis repos de</label>
           <select id="rest-seconds" aria-label="Durée du repos entre séries"><option value="60">1:00</option><option value="90">1:30</option><option value="120">2:00</option><option value="150">2:30</option><option value="180">3:00</option></select>
         </div>
-        <p class="hint">Chaque exercice a aussi ses boutons « Pause RP » et « Repos ». L'écran reste allumé pendant le décompte ; à la fin, le téléphone vibre et bipe.</p>
+        <div class="rest-row">
+          <label class="toggle-row"><input type="checkbox" id="rest-locked"> Sonner aussi écran verrouillé (son continu pendant le décompte ; selon le téléphone, ta musique peut se mettre en pause)</label>
+        </div>
+        <p class="hint">Chaque exercice a aussi ses boutons « Pause RP » et « Repos ». −5 s / +5 s ajustent le décompte en cours ; une pause RP ajustée est retenue pour cet exercice. L'écran reste allumé pendant le décompte ; à la fin, le téléphone vibre et bipe.</p>
       </article>
+      <article class="panel run-panel" id="run-panel">
+        <div class="panel-heading"><div><p class="eyebrow">COURSE</p><h3>Reprise course / marche</h3></div></div>
+        <div id="run-resume" class="run-box" hidden></div>
+        <div id="run-next-day" class="run-box" hidden></div>
+        <div id="run-status" class="run-status"></div>
+        <form id="run-launch" class="run-launch" novalidate>
+          <label>Séance<select name="step"></select></label>
+          <div class="form-grid three" id="run-custom" hidden>
+            <label>Course (min)<input name="runMin" inputmode="decimal" autocomplete="off" value="2"></label>
+            <label>Marche (min)<input name="walkMin" inputmode="decimal" autocomplete="off" value="2"></label>
+            <label>Répétitions<input name="reps" inputmode="numeric" autocomplete="off" value="6"></label>
+          </div>
+          <label class="toggle-row"><input type="checkbox" name="screenOff"> Mode écran éteint (son continu ; selon le téléphone, ta musique peut se mettre en pause)</label>
+          <button class="primary-button" type="submit">Lancer la séance de course</button>
+        </form>
+        <p class="hint">Écran noir allumé pendant la course : bips dans tes écouteurs (Bluetooth compris) et vibrations à chaque changement. Genou (0 à 10, la note la plus forte pendant, après ou le lendemain) : 0 à 2 → séance validée (2 validées = étape suivante) ; 3 à 5 → on répète l'étape ; plus de 5 → on recule d'une étape. C'est une proposition : valide la reprise avec ton médecin ou ton kiné.</p>
+        <div class="button-row">
+          <button type="button" class="secondary-button" id="run-add">Noter une course</button>
+          <label class="file-button">Importer un GPX<input type="file" id="run-gpx" accept=".gpx,application/gpx+xml"></label>
+        </div>
+        <p class="eyebrow run-journal-title">JOURNAL DE COURSE</p>
+        <div id="run-list" class="record-list"></div>
+      </article>
+
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">JOURNAL</p><h3>Séances enregistrées</h3></div></div>
         <div id="workout-history" class="record-list"></div>
@@ -191,15 +224,22 @@
         <button type="button" class="chip-button" id="day-today" hidden>Revenir à aujourd'hui</button>
       </div>
 
+      <div id="nutrition-daytype"></div>
       <div class="metric-grid" id="nutrition-totals"></div>
       <p class="muted" id="nutrition-fiber"></p>
       <p class="muted" id="nutrition-alcohol" hidden></p>
       <p class="hint" id="targets-hint" hidden>Définis tes objectifs de calories et de protéines dans <button type="button" class="link-button" data-go="settings">Réglages</button> pour voir ce qu'il te reste.</p>
 
+      <article class="panel gaps-panel" id="gaps-panel" hidden>
+        <p class="eyebrow">IL MANQUE</p>
+        <div id="gaps-list" class="gaps-list"></div>
+      </article>
+
       <article class="panel remaining-panel" id="remaining-panel" hidden>
         <p class="eyebrow">IL TE RESTE</p>
         <p class="remaining-text" id="remaining-text"></p>
         <div id="remaining-ideas" class="food-suggestions"></div>
+        <button type="button" class="secondary-button menu-open" id="menu-open" hidden>Génère la suite de ma journée</button>
       </article>
 
       <article class="panel quick-panel">
@@ -220,6 +260,7 @@
           </div>
           <div class="button-row scan-row">
             <button class="secondary-button" type="button" id="scan-open">Scanner un code-barres</button>
+            <button class="secondary-button" type="button" id="express-open">Saisie express</button>
             <span class="hint">Ou tape un nom : tes aliments déjà saisis + 3 300 aliments de la table Ciqual (Anses), même hors connexion.</span>
           </div>
           <div id="food-suggestions" class="food-suggestions"></div>
@@ -240,6 +281,18 @@
             <label>Lipides (g)<input name="fat" inputmode="decimal" autocomplete="off" placeholder="0"></label>
             <label>Fibres (g)<input name="fiber" inputmode="decimal" autocomplete="off" placeholder="0"></label>
             <label>Photo (facultatif)<input type="file" name="photo" accept="image/*"></label>
+          </div>
+          <div class="portion-row">
+            <span class="portion-label">Sans balance :</span>
+            <input id="portion-count" inputmode="decimal" autocomplete="off" value="1" aria-label="Nombre de portions">
+            <select id="portion-unit" aria-label="Unité de portion"></select>
+            <span class="hint" id="portion-result"></span>
+          </div>
+          <div class="cook-row" id="cook-row" hidden>
+            <span class="portion-label">Pesé :</span>
+            <button type="button" class="chip-button" data-cook="raw" aria-pressed="false">cru</button>
+            <button type="button" class="chip-button" data-cook="cooked" aria-pressed="false">cuit</button>
+            <span class="hint" id="cook-hint"></span>
           </div>
           <p class="hint" id="per100-hint"></p>
           <div id="product-badges" class="product-badges" hidden></div>
@@ -330,7 +383,8 @@
 
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">MUSCULATION</p><h3>Progression par exercice</h3></div>
-          <select id="progress-exercise" aria-label="Exercice"></select></div>
+          <span class="progress-tools"><select id="progress-exercise" aria-label="Exercice"></select>
+          <button type="button" class="link-button" id="rename-open">Renommer / fusionner</button></span></div>
         <div id="exercise-progress"></div>
       </article>
 
@@ -409,6 +463,45 @@
         </form>
       </article>
 
+      <article class="panel" id="day-targets-panel">
+        <div class="panel-heading"><div><p class="eyebrow">OBJECTIFS SELON LA JOURNÉE</p><h3>Complet, semi, sans sport</h3>
+          <p class="muted">Remplis ces trois lignes et l'accueil, la nutrition et « Il te reste » prennent tout seuls le bon objectif : complet si ta séance du jour a le vélo d'échauffement et la marche du retour, semi pour une séance sans ça ou une course, sans sport sinon. Tu peux aussi choisir le type du jour à la main (ex. « Complet » le matin si tu vas à la salle le soir).</p></div></div>
+        <form id="day-targets-form" novalidate>
+          <fieldset class="day-row">
+            <legend><b>Complet</b> <span class="muted">· vélo + musculation + marche retour</span></legend>
+            <div class="form-grid four">
+              <label>kcal<input name="full-kcal" inputmode="numeric" autocomplete="off"></label>
+              <label>Protéines (g)<input name="full-protein" inputmode="numeric" autocomplete="off"></label>
+              <label>Glucides (g)<input name="full-carbs" inputmode="numeric" autocomplete="off"></label>
+              <label>Lipides (g)<input name="full-fat" inputmode="numeric" autocomplete="off"></label>
+            </div>
+          </fieldset>
+          <fieldset class="day-row">
+            <legend><b>Semi</b> <span class="muted">· mini séance, séance sans marche ou course</span></legend>
+            <div class="form-grid four">
+              <label>kcal<input name="semi-kcal" inputmode="numeric" autocomplete="off"></label>
+              <label>Protéines (g)<input name="semi-protein" inputmode="numeric" autocomplete="off"></label>
+              <label>Glucides (g)<input name="semi-carbs" inputmode="numeric" autocomplete="off"></label>
+              <label>Lipides (g)<input name="semi-fat" inputmode="numeric" autocomplete="off"></label>
+            </div>
+          </fieldset>
+          <fieldset class="day-row">
+            <legend><b>Sans sport</b> <span class="muted">· aucune séance</span></legend>
+            <div class="form-grid four">
+              <label>kcal<input name="rest-kcal" inputmode="numeric" autocomplete="off"></label>
+              <label>Protéines (g)<input name="rest-protein" inputmode="numeric" autocomplete="off"></label>
+              <label>Glucides (g)<input name="rest-carbs" inputmode="numeric" autocomplete="off"></label>
+              <label>Lipides (g)<input name="rest-fat" inputmode="numeric" autocomplete="off"></label>
+            </div>
+          </fieldset>
+          <div class="button-row">
+            <button class="primary-button" type="submit">Enregistrer les objectifs par journée</button>
+            <button class="link-button" type="button" id="day-targets-clear">Revenir à un seul objectif</button>
+          </div>
+          <p class="hint">Les fibres et le poids cible du bloc « Objectifs quotidiens » restent communs à tous les jours.</p>
+        </form>
+      </article>
+
       <article class="panel" id="sync-panel">
         <div class="panel-heading"><div><p class="eyebrow">SYNCHRONISATION</p><h3>Téléphone et PC</h3>
           <p class="muted">Tes entrées, ton programme et tes objectifs se synchronisent automatiquement entre tes appareils, via ton projet Firebase gratuit. Les photos restent sur l'appareil où tu les prends.</p></div></div>
@@ -430,6 +523,42 @@
             <button type="button" class="secondary-button" id="sync-relogin" hidden>Me reconnecter</button>
             <button type="button" class="link-button" id="sync-disconnect">Déconnecter cet appareil</button>
           </div>
+          <div class="cloud-backups">
+            <p class="eyebrow">COPIES DE SÉCURITÉ</p>
+            <p class="hint">Une fois par semaine, une copie complète (sans les photos) est rangée dans ton Firebase ; les 8 dernières sont gardées. Elle te sauve si une erreur (suppression, mauvais import) passe par la synchro.</p>
+            <div class="button-row">
+              <button type="button" class="secondary-button" id="cloud-backup-show">Voir les copies</button>
+              <button type="button" class="secondary-button" id="cloud-backup-now">Faire une copie maintenant</button>
+            </div>
+            <div id="cloud-backup-list" class="backup-list"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel" id="strava-panel">
+        <div class="panel-heading"><div><p class="eyebrow">STRAVA (FACULTATIF)</p><h3>Import automatique de tes courses</h3>
+          <p class="muted">Tes sorties « Course » enregistrées sur Strava arrivent toutes seules dans le journal de course (à l'ouverture de l'app, au plus toutes les 30 min). Gratuit ; un seul appareil suffit, les courses importées se synchronisent.</p></div></div>
+        <div id="strava-setup">
+          <ol class="plain-list strava-steps">
+            <li>Sur strava.com (plus simple sur ordinateur) : Paramètres → « Mon application API » (adresse : strava.com/settings/api).</li>
+            <li>Crée l'application : nom « Personal Performance », catégorie au choix, site web = l'adresse de l'app, « Domaine du rappel d'autorisation » = <b id="strava-domain"></b>.</li>
+            <li>Copie ici l'« ID client » et le « Secret client » (bouton « Afficher »), puis « Connecter Strava » sur l'appareil où tu veux l'import.</li>
+          </ol>
+          <form id="strava-form" novalidate>
+            <div class="form-grid">
+              <label>ID client<input name="clientId" inputmode="numeric" autocomplete="off"></label>
+              <label>Secret client<input name="clientSecret" type="password" autocomplete="off" spellcheck="false"></label>
+            </div>
+            <button class="primary-button" type="submit">Connecter Strava</button>
+            <p class="hint">Le secret et les clés d'accès restent sur cet appareil (jamais synchronisés). Strava te demande d'autoriser l'accès à tes activités : coche-le.</p>
+          </form>
+        </div>
+        <div id="strava-connected" hidden>
+          <p id="strava-status" class="muted"></p>
+          <div class="button-row">
+            <button type="button" class="primary-button" id="strava-import">Importer maintenant</button>
+            <button type="button" class="link-button" id="strava-disconnect">Déconnecter Strava</button>
+          </div>
         </div>
       </article>
 
@@ -441,6 +570,7 @@
           <button type="button" class="secondary-button" id="program-add-session">+ Nouvelle séance</button>
           <button type="button" class="primary-button" id="program-save">Enregistrer le programme</button>
           <button type="button" class="link-button" id="program-reset">Programme d'origine</button>
+          <button type="button" class="secondary-button" id="coach-program-open">Importer le programme du coach</button>
         </div>
       </article>
 
@@ -490,20 +620,21 @@
       <article class="panel">
         <div class="panel-heading"><div><p class="eyebrow">À SAVOIR</p><h3>Version <span id="app-version"></span></h3></div></div>
         <ul class="plain-list">
-          <li>Aucun compte, aucun serveur : rien ne quitte l'appareil sans ton action.</li>
-          <li>Pas de synchronisation automatique entre téléphone et PC : utilise l'export puis l'import en mode « Fusionner ».</li>
+          <li>Sans synchronisation, rien ne quitte l'appareil sans ton action. Avec, tes données vont seulement dans ton propre projet Firebase.</li>
+          <li>Garde quand même une sauvegarde de temps en temps (export .json) : c'est ta copie à toi, hors de tout service.</li>
           <li>La mini-base alimentaire est indicative ; l'étiquette du produit fait foi.</li>
           <li>Les conseils de charge suivent une règle simple (rest-pause : reps de la 1re série avant l'échec) : écoute tes sensations et ton coach.</li>
         </ul>
       </article>
     </section>
 
-    <footer><span>PERSONAL PERFORMANCE · VERSION 3.3</span><span>LOCAL FIRST · AUCUN COMPTE REQUIS</span></footer>
+    <footer><span>PERSONAL PERFORMANCE · VERSION 3.8</span><span>LOCAL FIRST · AUCUN COMPTE REQUIS</span></footer>
   </main>
 
   <div id="rest-pill" class="rest-pill" hidden>
     <span id="rest-pill-label">Repos</span><b id="rest-pill-time">1:30</b>
-    <button type="button" id="rest-more" class="rest-more">+15 s</button>
+    <button type="button" id="rest-less" class="rest-more" aria-label="5 secondes de moins">−5</button>
+    <button type="button" id="rest-more" class="rest-more" aria-label="5 secondes de plus">+5</button>
     <button type="button" id="rest-stop">Arrêter</button>
     <span class="rest-pill-track"><span id="rest-pill-bar"></span></span>
   </div>
@@ -519,7 +650,8 @@
     </div>
     <div id="sm-timer" class="sm-timer" hidden>
       <span id="sm-timer-label">Repos</span><b id="sm-timer-time">1:30</b>
-      <button type="button" id="sm-timer-more">+15 s</button>
+      <button type="button" id="sm-timer-less" aria-label="5 secondes de moins">−5</button>
+      <button type="button" id="sm-timer-more" aria-label="5 secondes de plus">+5</button>
       <button type="button" id="sm-timer-stop">Passer</button>
       <span class="sm-timer-track"><span id="sm-timer-bar"></span></span>
     </div>
@@ -528,11 +660,161 @@
       <div id="sm-sets" class="sm-sets"></div>
       <div id="sm-panel"></div>
       <div class="sm-extra">
+        <button type="button" class="chip-button" id="sm-replace">Remplacer l'exercice</button>
         <button type="button" class="chip-button" id="sm-add-set">+ Ajouter une série</button>
         <button type="button" class="chip-button" id="sm-finish">Terminer et revenir au formulaire</button>
+        <button type="button" class="chip-button" id="sm-dim-toggle">Écran noir entre les séries : oui</button>
       </div>
     </div>
     <div class="sm-bottom" id="sm-actions"></div>
+    <div id="sm-dim" class="sm-dim" hidden>
+      <span id="sm-dim-label" class="sm-dim-label"></span>
+      <b id="sm-dim-time" class="sm-dim-time"></b>
+      <span id="sm-dim-next" class="sm-dim-next"></span>
+      <small>Touche l'écran pour revenir · l'écran ne se verrouille pas pendant la séance</small>
+    </div>
+  </dialog>
+
+  <dialog id="gen-dialog" class="dialog form-dialog gen-dialog">
+    <h3>Génère ma séance</h3>
+    <form id="gen-form" class="gen-form" novalidate>
+      <label>Temps dispo<select name="minutes">
+        <option value="30">30 min</option><option value="40">40 min</option><option value="50">50 min</option><option value="60">1 h</option><option value="75">1 h 15</option><option value="90">1 h 30</option>
+      </select></label>
+      <label>Type<select name="type">
+        <option value="auto">Automatique</option><option value="push">Push</option><option value="pull">Pull</option><option value="upper">Haut du corps complet</option>
+      </select></label>
+      <label>Cardio<select name="cardio">
+        <option value="warmup">Échauffement vélo 5 min</option><option value="end">En fin de séance</option><option value="both">Les deux</option><option value="none">Aucun</option>
+      </select></label>
+      <label>Machine de cardio<select name="machine"></select></label>
+    </form>
+    <p class="hint">Pas de jambes. Muscles travaillés la veille : 2 séries maximum. Exercice qui stagne : remplacé par une variante. Charges : ta dernière fois, + palier si le seuil est atteint.</p>
+    <div id="gen-result" class="gen-result"></div>
+    <div class="button-row">
+      <button class="primary-button" type="button" id="gen-start">Lancer en mode séance</button>
+      <button class="secondary-button" type="button" id="gen-again">Autre proposition</button>
+      <button class="secondary-button" type="button" id="gen-cancel">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="replace-dialog" class="dialog form-dialog">
+    <h3 id="replace-title">Remplacer l'exercice</h3>
+    <p class="hint" id="replace-group"></p>
+    <div id="replace-list" class="replace-list"></div>
+    <form id="replace-form" class="scan-manual" novalidate>
+      <label>Ou un autre exercice<input name="custom" list="exercise-names" maxlength="80" autocomplete="off" placeholder="Nom de l'exercice"></label>
+      <button class="secondary-button" type="submit">Choisir</button>
+    </form>
+    <div class="button-row"><button class="secondary-button" type="button" id="replace-cancel">Annuler</button></div>
+  </dialog>
+
+  <dialog id="rename-dialog" class="dialog form-dialog">
+    <form id="rename-form" novalidate>
+      <h3>Renommer / fusionner</h3>
+      <p>Exercice : <b id="rename-old"></b></p>
+      <label class="full-label">Nouveau nom (ou nom d'un exercice existant pour fusionner)<input name="name" list="exercise-names" maxlength="80" autocomplete="off"></label>
+      <p class="hint" id="rename-hint"></p>
+      <div class="button-row">
+        <button class="primary-button" type="submit">Appliquer partout</button>
+        <button class="secondary-button" type="button" id="rename-cancel">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="coach-program-dialog" class="dialog form-dialog">
+    <h3>Programme proposé par le coach</h3>
+    <p class="hint">Copie la réponse de ton agent coach qui contient le bloc du programme (gabarit « programme pour l'app ») et colle-la ici.</p>
+    <textarea id="coach-program-text" rows="6" autocomplete="off" placeholder='{ "programme": { "seances": [ … ] } }'></textarea>
+    <div id="coach-program-preview" class="gen-result"></div>
+    <div class="button-row">
+      <button class="primary-button" type="button" id="coach-program-apply" disabled>Installer ce programme</button>
+      <button class="secondary-button" type="button" id="coach-program-cancel">Annuler</button>
+    </div>
+  </dialog>
+
+  <dialog id="run-timer" class="run-timer fullscreen-dialog" aria-label="Course en cours">
+    <div class="rt-top"><span id="rt-step"></span><span id="rt-total"></span></div>
+    <div class="rt-main">
+      <p class="rt-phase" id="rt-phase">MARCHE</p>
+      <p class="rt-label" id="rt-label"></p>
+      <p class="rt-time" id="rt-time">5:00</p>
+      <div class="rt-bar"><span id="rt-bar"></span></div>
+      <p class="rt-next" id="rt-next"></p>
+    </div>
+    <div class="rt-actions">
+      <button type="button" class="rt-button" id="rt-pause">Pause</button>
+      <button type="button" class="rt-button" id="rt-skip">Passer</button>
+      <button type="button" class="rt-button rt-danger" id="rt-pain">J'ai mal : j'arrête</button>
+      <button type="button" class="rt-button" id="rt-stop">Terminer</button>
+    </div>
+    <p class="rt-hint" id="rt-hint"></p>
+  </dialog>
+
+  <dialog id="run-dialog" class="dialog form-dialog">
+    <form id="run-form" novalidate>
+      <h3 id="run-form-title">Course</h3>
+      <div class="form-grid">
+        <label>Date<input type="date" name="date" required></label>
+        <label>Durée (32:30, 32 ou 1:05:00)<input name="duration" inputmode="text" autocomplete="off" placeholder="32:30"></label>
+        <label>Distance (km)<input name="distanceKm" inputmode="decimal" autocomplete="off" placeholder="facultatif"></label>
+        <label>Étape du plan<select name="planStep"></select></label>
+      </div>
+      <label class="toggle-row" id="run-completed-row"><input type="checkbox" name="completed"> Séance du plan faite en entier</label>
+      <p class="eyebrow">GENOU (0 = RIEN, 10 = INSUPPORTABLE)</p>
+      <div class="form-grid three">
+        <label>Pendant<input name="painDuring" inputmode="decimal" autocomplete="off"></label>
+        <label>Juste après<input name="painAfter" inputmode="decimal" autocomplete="off"></label>
+        <label>Le lendemain<input name="painNext" inputmode="decimal" autocomplete="off" placeholder="demain"></label>
+      </div>
+      <div class="form-grid">
+        <label>Effort ressenti (1 à 10)<input name="effort" inputmode="numeric" autocomplete="off"></label>
+      </div>
+      <label class="full-label">Notes<textarea name="notes" rows="2" maxlength="1000" placeholder="Sensations, parcours, chaussures…"></textarea></label>
+      <div class="button-row">
+        <button class="primary-button" type="submit">Enregistrer</button>
+        <button class="secondary-button" type="button" id="run-form-cancel">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="menu-dialog" class="dialog form-dialog gen-dialog">
+    <h3>La suite de ta journée</h3>
+    <p class="hint">Des repas que tu manges vraiment (repas habituels, déjà notés, recettes, aliments fréquents), choisis pour tomber sur tes calories et tes protéines. Ajoute chaque repas quand tu l'as mangé.</p>
+    <div id="menu-result" class="gen-result"></div>
+    <div class="button-row">
+      <button class="secondary-button" type="button" id="menu-regen">Tout reproposer</button>
+      <button class="secondary-button" type="button" id="menu-close">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="coach-sheet-dialog" class="dialog form-dialog">
+    <h3>Fiche « État actuel »</h3>
+    <p class="hint" id="coach-sheet-status"></p>
+    <div id="coach-sheet-base-box" hidden>
+      <label class="full-label">Ta fiche actuelle (copie tout le texte de la fiche du projet coach)<textarea id="coach-sheet-base" rows="6" autocomplete="off" spellcheck="false"></textarea></label>
+      <button class="primary-button" type="button" id="coach-sheet-save-base">Enregistrer ma fiche</button>
+    </div>
+    <label class="full-label">Fiche à jour (tu peux corriger avant de copier)<textarea id="coach-sheet-output" rows="12" autocomplete="off" spellcheck="false"></textarea></label>
+    <p class="hint">Gardé tel quel : tous tes textes. Remplacé : la date, le poids de référence, le tour de taille, la cible calorique, le tableau des charges et les lignes marquées « (app) ».</p>
+    <div class="button-row">
+      <button class="primary-button" type="button" id="coach-sheet-copy">Copier</button>
+      <button class="secondary-button" type="button" id="coach-sheet-download">Télécharger (.md)</button>
+      <button class="link-button" type="button" id="coach-sheet-edit-base">Changer ma fiche de base</button>
+      <button class="secondary-button" type="button" id="coach-sheet-close">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="express-dialog" class="dialog form-dialog express-dialog">
+    <h3>Saisie express</h3>
+    <label class="full-label">Ce que tu as mangé<textarea id="express-text" rows="3" autocomplete="off" placeholder="200 g skyr, 50 g flocons d'avoine, 1 banane"></textarea></label>
+    <p class="hint">Sépare les aliments par des virgules. Tu peux dicter avec le micro de ton clavier. Quantités comprises : grammes, ml, c. à soupe, tranches, pièces, bols…</p>
+    <label>Repas<select id="express-kind"></select></label>
+    <div id="express-lines" class="express-lines"></div>
+    <div class="button-row">
+      <button class="primary-button" type="button" id="express-add" disabled>Ajouter</button>
+      <button class="secondary-button" type="button" id="express-cancel">Annuler</button>
+    </div>
   </dialog>
 
   <dialog id="template-dialog" class="dialog form-dialog">
@@ -602,6 +884,7 @@
 
   <script src="utils.js"></script>
   <script src="data.js"></script>
+  <script src="daytargets.js"></script>
   <script src="db.js"></script>
   <script src="charts.js"></script>
   <script src="training.js"></script>
@@ -610,14 +893,24 @@
   <script src="scan.js"></script>
   <script src="quickmeals.js"></script>
   <script src="recipes.js"></script>
+  <script src="foodtools.js"></script>
+  <script src="express.js"></script>
+  <script src="exercises.js"></script>
+  <script src="generator.js"></script>
+  <script src="run.js"></script>
+  <script src="runtimer.js"></script>
+  <script src="menu.js"></script>
   <script src="body.js"></script>
   <script src="battery.js"></script>
   <script src="wellbeing.js"></script>
   <script src="dashboard.js"></script>
   <script src="coach.js"></script>
+  <script src="coachsheet.js"></script>
   <script src="backup.js"></script>
   <script src="settings.js"></script>
   <script src="sync.js"></script>
+  <script src="cloudbackup.js"></script>
+  <script src="strava.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

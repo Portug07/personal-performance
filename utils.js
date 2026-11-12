@@ -112,6 +112,8 @@ function esc(value) {
 function fold(text) {
   return String(text ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
+/* Entrées du plus récent au plus ancien : par date, puis par heure de saisie. */
+function newestFirst(a, b) { return String(b.date || "").localeCompare(String(a.date || "")) || (b.createdAt || 0) - (a.createdAt || 0); }
 function plural(n, singular, pluralForm) { return `${fmt(n, 0)} ${Math.abs(n) > 1 ? (pluralForm || singular + "s") : singular}`; }
 
 /* ---------- Messages et erreurs ---------- */

@@ -21,8 +21,9 @@ async function onTargetsSubmit(event) {
       fiber: readNumber(form, "fiber", { min: 0, max: 200, decimals: 0, label: "Fibres" }),
       weight: readNumber(form, "weight", { min: 20, max: 400, decimals: 1, label: "Poids cible" })
     };
-    await setSetting("targets", targets);
-    state.targets = targets;
+    /* Les objectifs par journée et les choix du jour sont gardés. */
+    state.targets = normalizeTargets({ ...state.targets, ...targets });
+    await setSetting("targets", state.targets);
     showToast("Objectifs enregistrés.");
   });
 }
@@ -230,7 +231,9 @@ function setupSettings() {
 
 function renderSettings() {
   safeRender("objectifs", renderTargetsForm);
+  safeRender("objectifs par journée", renderDayTargetsForm);
   safeRender("programme", renderProgramEditor);
   safeRender("synchronisation", renderSyncPanel);
+  safeRender("strava", renderStravaPanel);
   renderStorageInfo().catch(console.error);
 }
